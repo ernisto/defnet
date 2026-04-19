@@ -1,5 +1,6 @@
 local suites = {
 	require './codec.spec',
+	require './diff_codec.spec',
 }
 
 local function is_test(name: string, value: any): boolean
