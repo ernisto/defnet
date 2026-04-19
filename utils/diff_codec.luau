@@ -94,8 +94,8 @@ local function pop_path(idx: schema_index): path
 	return path
 end
 
-local function encode(diff: diff, idx: schema_index): (buffer, { any })
-	codec.begin_encode()
+local function encode(diff: diff, idx: schema_index): (buffer, { any }?)
+	codec.reset_workspace()
 
 	local changes = diff.changes
 	push_size(#changes)
@@ -125,10 +125,10 @@ local function encode(diff: diff, idx: schema_index): (buffer, { any })
 		push_size(s.index)
 	end
 
-	return codec.finish_encode()
+	return codec.free_workspace()
 end
 local function decode(input: buffer, input_unknowns: { any }?, idx: schema_index): diff
-	codec.begin_decode(input, input_unknowns)
+	codec.load_workspace(input, input_unknowns)
 
 	local changes_len = pop_size()
 	local changes = table.create(changes_len)

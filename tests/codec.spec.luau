@@ -1,4 +1,4 @@
-local codec = require '../lib/codec'
+local codec = require '../utils/codec'
 
 local test = {}
 
@@ -17,7 +17,7 @@ function test.should_roundtrip_nil()
 	local decoded = codec.decode(encoded, unknowns)
 
 	assert(decoded == nil)
-	assert(#unknowns == 0)
+	assert(unknowns == nil)
 end
 
 function test.should_roundtrip_booleans()
@@ -122,7 +122,7 @@ function test.should_track_unknown_values_once()
 
 	local _, unknowns = codec.encode(input)
 
-	assert(#unknowns == 1)
+	assert(unknowns and #unknowns == 1)
 	assert(unknowns[1] == unknown)
 end
 
@@ -176,11 +176,11 @@ function test.should_roundtrip_varint_boundaries()
 		268435455, -- 4 byte max (2^28 - 1)
 	}
 	for _, n in cases do
-		codec.begin_encode()
+		codec.reset_workspace()
 		codec.push_varint(n)
-		local encoded = codec.finish_encode()
+		local encoded = codec.free_workspace()
 
-		codec.begin_decode(encoded)
+		codec.load_workspace(encoded)
 		local decoded = codec.pop_varint()
 		assert(decoded == n, `varint roundtrip failed for {n}: got {decoded}`)
 	end
@@ -197,11 +197,14 @@ function test.should_use_expected_byte_count_for_varints()
 		{ value = 2097152, bytes = 4 },
 	}
 	for _, case in cases do
-		codec.begin_encode()
+		codec.reset_workspace()
 		codec.push_varint(case.value)
-		local encoded = codec.finish_encode()
+		local encoded = codec.free_workspace()
 
-		assert(buffer.len(encoded) == case.bytes, `varint {case.value} expected {case.bytes} bytes, got {buffer.len(encoded)}`)
+		assert(
+			buffer.len(encoded) == case.bytes,
+			`varint {case.value} expected {case.bytes} bytes, got {buffer.len(encoded)}`
+		)
 	end
 end
 

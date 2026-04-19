@@ -1,4 +1,4 @@
-local diff = require '../lib/diff'
+local diff = require '../utils/diff'
 
 local test = {}
 
@@ -166,7 +166,7 @@ function test.should_apply_change_to_root_key()
 end
 
 function test.should_apply_change_creating_missing_parents()
-	local t = {}
+	local t: any = {}
 	diff.apply(t, make { changes = { { path = { 'stats', 'hp' }, value = 100 } } })
 	assert(t.stats.hp == 100)
 end

@@ -1,6 +1,6 @@
-local codec = require '../lib/codec'
-local diff = require '../lib/diff'
-local diff_codec = require '../lib/diff_codec'
+local codec = require '../utils/codec'
+local diff = require '../utils/diff'
+local diff_codec = require '../utils/diff_codec'
 
 local ITERATIONS = 1000
 
@@ -65,7 +65,7 @@ local diff_small = {
 local function make_diff_large(n: number)
 	local diff = { changes = {}, removes = {}, shift_insertions = {}, shift_removes = {} }
 	for i = 1, n do
-		table.insert(diff.changes, { path = { 'items', i, 'count' }, value = i })
+		table.insert(diff.changes, { path = { 'items', i :: any, 'count' }, value = i })
 	end
 	return diff
 end
@@ -104,19 +104,19 @@ end)
 
 section 'varint'
 bench('push_varint 127 (1 byte)', function()
-	codec.begin_encode()
+	codec.reset_workspace()
 	codec.push_varint(127)
-	codec.finish_encode()
+	codec.free_workspace()
 end)
 bench('push_varint 16383 (2 byte)', function()
-	codec.begin_encode()
+	codec.reset_workspace()
 	codec.push_varint(16383)
-	codec.finish_encode()
+	codec.free_workspace()
 end)
 bench('push_varint 2097151 (3 byte)', function()
-	codec.begin_encode()
+	codec.reset_workspace()
 	codec.push_varint(2097151)
-	codec.finish_encode()
+	codec.free_workspace()
 end)
 
 section 'diff_codec'

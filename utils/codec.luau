@@ -39,12 +39,12 @@ local function reset_workspace()
 	fail = false
 	unknowns = {}
 end
-local function free_workspace(): (buffer, { any })
+local function free_workspace(): (buffer, { any }?)
 	local copy = buffer.create(cursor)
 	buffer.copy(copy, 0, working_buf, 0, cursor)
 
 	if fail then error 'some values couldnt be serialized' end
-	return copy, unknowns
+	return copy, if #unknowns > 0 then unknowns else nil
 end
 local function load_workspace(input: buffer, input_unknowns: { any }?)
 	local input_len = buffer.len(input) + WORST_MISSING_BYTES_CASE
@@ -76,8 +76,8 @@ local function advance(bytes: number): number
 end
 local function peek_u32(): number
 	-- HACK: if we are reading the last byte, it still misses 3 bytes
-	-- so we are alway allocating +3 bytes for `next_output` instead
-	-- of waste time handling edge cases
+	-- so we are alway allocating +3 bytes for `working_buf`
+	-- instead of waste time handling edge cases
 	return buffer.readu32(working_buf, cursor)
 end
 
@@ -304,7 +304,7 @@ function pop_tab(): table
 end
 
 -- module
-local function encode(value: any): (buffer, { any })
+local function encode(value: any): (buffer, { any }?)
 	reset_workspace()
 	push_value(value)
 	return free_workspace()
@@ -321,9 +321,9 @@ return table.freeze {
 	decode = decode,
 
 	-- internal workspace
-	begin_encode = reset_workspace,
-	finish_encode = free_workspace,
-	begin_decode = load_workspace,
+	reset_workspace = reset_workspace,
+	free_workspace = free_workspace,
+	load_workspace = load_workspace,
 
 	-- internal datatypes
 	push_u8 = push_u8,

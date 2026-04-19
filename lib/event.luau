@@ -1,6 +1,6 @@
 local Players = game:GetService 'Players'
 
-local codec = require './codec'
+local codec = require '../utils/codec'
 
 -- defs
 type remote_desc<T> = { class: string, codec: codec.codec_impl<T, ...any>? }

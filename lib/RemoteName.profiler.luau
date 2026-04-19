@@ -1,4 +1,4 @@
-local codec = require './codec'
+local codec = require '../utils/codec'
 
 return function(event: UnreliableRemoteEvent | RemoteEvent | RemoteFunction, player: Player, args: { any })
 	if not event:HasTag 'preserved' then return end

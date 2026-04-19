@@ -1,4 +1,4 @@
-local diff_codec = require '../lib/diff_codec'
+local diff_codec = require '../utils/diff_codec'
 
 local test = {}
 
@@ -78,7 +78,7 @@ end
 function test.should_roundtrip_nested_known_path()
 	local idx = diff_codec.build_index { pets = { [1] = { name = '', level = 0 } } }
 	local diff = make_diff {
-		changes = { { path = { 'pets', 1, 'name' }, value = 'rex' } },
+		changes = { { path = { 'pets', 1 :: any, 'name' }, value = 'rex' } },
 	}
 
 	local encoded, unknowns = diff_codec.encode(diff, idx)
@@ -178,7 +178,7 @@ function test.should_preserve_value_types_in_changes()
 	local idx = diff_codec.build_index { a = 0, b = 0, c = 0, d = 0 }
 	local diff = make_diff {
 		changes = {
-			{ path = { 'a' }, value = true },
+			{ path = { 'a' }, value = true } :: any,
 			{ path = { 'b' }, value = vector.create(1, 2, 3) },
 			{ path = { 'c' }, value = { nested = 'ok' } },
 			{ path = { 'd' }, value = nil },
@@ -198,7 +198,7 @@ function test.should_preserve_number_key_vs_string_key()
 	local idx = diff_codec.build_index { pets = { [1] = {} } }
 	local diff = make_diff {
 		changes = {
-			{ path = { 'pets', 1 }, value = 'known_numeric' },
+			{ path = { 'pets', 1 :: any }, value = 'known_numeric' },
 			{ path = { 'pets', '1' }, value = 'string_one' },
 		},
 	}
