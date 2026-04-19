@@ -94,8 +94,7 @@ local function pop_path(idx: schema_index): path
 	return path
 end
 
-local function encode(diff: diff, schema: any?): (buffer, { any })
-	local idx = build_index(schema)
+local function encode(diff: diff, idx: schema_index): (buffer, { any })
 	codec.begin_encode()
 
 	local changes = diff.changes
@@ -128,8 +127,7 @@ local function encode(diff: diff, schema: any?): (buffer, { any })
 
 	return codec.finish_encode()
 end
-local function decode(input: buffer, input_unknowns: { any }?, schema: any?): diff
-	local idx = build_index(schema)
+local function decode(input: buffer, input_unknowns: { any }?, idx: schema_index): diff
 	codec.begin_decode(input, input_unknowns)
 
 	local changes_len = pop_size()

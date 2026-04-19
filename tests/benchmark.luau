@@ -1,4 +1,5 @@
 local codec = require '../lib/codec'
+local diff = require '../lib/diff'
 local diff_codec = require '../lib/diff_codec'
 
 local ITERATIONS = 1000
@@ -48,6 +49,8 @@ local schema = {
 	items = {}, --{ [1] = { name = '', count = 0 } },
 	stats = { hp = 0, mp = 0 },
 }
+local idx = diff_codec.build_index(schema)
+local empty_idx = diff_codec.build_index(nil)
 
 local diff_small = {
 	changes = {
@@ -72,9 +75,9 @@ local diff_large = make_diff_large(1024)
 -- sizes
 local small_buf = codec.encode(small_table)
 local large_buf = codec.encode(large_table)
-local diff_small_buf = diff_codec.encode(diff_small, schema)
-local diff_small_no_schema_buf = diff_codec.encode(diff_small)
-local diff_large_buf = diff_codec.encode(diff_large, schema)
+local diff_small_buf = diff_codec.encode(diff_small, idx)
+local diff_small_no_schema_buf = diff_codec.encode(diff_small, empty_idx)
+local diff_large_buf = diff_codec.encode(diff_large, idx)
 
 print 'payload sizes:'
 print(string.format('  small table          : %d bytes', buffer.len(small_buf)))
@@ -118,17 +121,84 @@ end)
 
 section 'diff_codec'
 bench('encode diff (small, w/ schema)', function()
-	diff_codec.encode(diff_small, schema)
+	diff_codec.encode(diff_small, idx)
 end)
 bench('encode diff (small, no schema)', function()
-	diff_codec.encode(diff_small)
+	diff_codec.encode(diff_small, empty_idx)
 end)
 bench('decode diff (small, w/ schema)', function()
-	diff_codec.decode(diff_small_buf, nil, schema)
+	diff_codec.decode(diff_small_buf, nil, idx)
 end)
 bench('encode diff (large, n=1024)', function()
-	diff_codec.encode(diff_large, schema)
+	diff_codec.encode(diff_large, idx)
 end)
 bench('decode diff (large, n=1024)', function()
-	diff_codec.decode(diff_large_buf, nil, schema)
+	diff_codec.decode(diff_large_buf, nil, idx)
+end)
+
+-- diff fixtures
+local large_prev = make_large_table(1024)
+local large_curr_unchanged = make_large_table(1024)
+
+local large_curr_scalar = make_large_table(1024)
+for i = 1, 1024 do
+	large_curr_scalar.items[i].count = i + 1
+end
+
+local large_curr_array_insert = make_large_table(1024)
+table.insert(large_curr_array_insert.items, 512, { name = 'new_item', count = 0, rarity = 0 })
+
+local large_curr_array_remove = make_large_table(1024)
+table.remove(large_curr_array_remove.items, 512)
+
+local nested_prev = { a = { b = { c = { d = { e = { f = 1 } } } } } }
+local nested_curr = { a = { b = { c = { d = { e = { f = 2 } } } } } }
+
+local diff_full_large = diff.compute({}, large_prev)
+local diff_scalar_large = diff.compute(large_prev, large_curr_scalar)
+local diff_insert_large = diff.compute(large_prev, large_curr_array_insert)
+
+section 'diff compute'
+bench('compute equal (small)', function()
+	diff.compute(small_table, small_table)
+end)
+bench('compute nested 6-deep change', function()
+	diff.compute(nested_prev, nested_curr)
+end)
+bench('compute equal (large, n=1024)', function()
+	diff.compute(large_prev, large_curr_unchanged)
+end)
+bench('compute scalar change all rows (large, n=1024)', function()
+	diff.compute(large_prev, large_curr_scalar)
+end)
+bench('compute array insert middle (large, n=1024)', function()
+	diff.compute(large_prev, large_curr_array_insert)
+end)
+bench('compute array remove middle (large, n=1024)', function()
+	diff.compute(large_prev, large_curr_array_remove)
+end)
+bench('compute from empty (large, n=1024)', function()
+	diff.compute({}, large_prev)
+end)
+
+section 'diff apply'
+bench('apply scalar change all rows (large, n=1024)', function()
+	local root = diff.clone(large_prev)
+	diff.apply(root, diff_scalar_large)
+end)
+bench('apply array insert middle (large, n=1024)', function()
+	local root = diff.clone(large_prev)
+	diff.apply(root, diff_insert_large)
+end)
+bench('apply full populate (large, n=1024)', function()
+	local root = {}
+	diff.apply(root, diff_full_large)
+end)
+
+section 'diff helpers'
+bench('clone large table (n=1024)', function()
+	diff.clone(large_prev)
+end)
+bench('equal large equal (n=1024)', function()
+	diff.equal(large_prev, large_curr_unchanged)
 end)

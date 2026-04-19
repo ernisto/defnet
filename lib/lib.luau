@@ -4,6 +4,7 @@ local is_client = RunService:IsClient()
 local codec = require './codec'
 local event = require './event'
 local func = require './func'
+local state = require './state'
 
 type remote_desc<T> = { class: string, codec: codec.codec_impl<T, ...any>? }
 
@@ -14,7 +15,12 @@ local function remotes<T>(remotes_def: T, root: Instance?): T
 
 	for name, desc in remotes_def do
 		local class = type(desc) == 'table' and (desc :: remote_desc<any>).class
-		if class then
+		if class == 'state' then
+			local remote = if is_client then parent:WaitForChild(name) else Instance.new 'RemoteEvent'
+			remote.Name = name
+			remote.Parent = parent
+			remotes_def[name] = state.wrap(remote :: RemoteEvent, desc :: any)
+		elseif class then
 			local remote = if is_client then parent:WaitForChild(name) else Instance.new(class :: any)
 			remote.Name = name
 			remote.Parent = parent
@@ -38,4 +44,6 @@ return table.freeze {
 	remotes = remotes,
 	event = event.define,
 	func = func.define,
+	state = state.define,
+	step_sync = state.step_sync,
 }

@@ -1,6 +1,8 @@
 local suites = {
-	require './codec.spec',
+	require './codec.spec' :: any,
+	require './diff.spec',
 	require './diff_codec.spec',
+	require './sync.spec',
 }
 
 local function is_test(name: string, value: any): boolean
