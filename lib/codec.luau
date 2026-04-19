@@ -1,14 +1,8 @@
 --!native
 
-local working_buf = buffer.create(1024)
-local unknowns: { any } = {}
-local cursor = 0
-local fail = false
-
 local WORST_MISSING_BYTES_CASE = 3 -- check `peek_u32` hack comment
 
 -- utils
-local pop, push
 local type_to_tags = {
 	-- [anything else] = 1	-- unknown
 	['nil'] = 2,
@@ -20,9 +14,18 @@ local type_to_tags = {
 	['buffer'] = 8,
 }
 
--- helpers
 export type codec_impl<Data, Encoded...> = { encode: (Data) -> Encoded..., decode: (Encoded...) -> Data }
 type table = { [any]: any }
+
+-- workspace
+-- based on global states for speed
+-- not stables for concurrency work
+-- but we arent doing it here anyway
+local limit = 1024 -- expandable
+local working_buf = buffer.create(limit)
+local unknowns: { any } = {}
+local cursor = 0
+local fail = false
 
 local function warn_not_available()
 	warn(`unknown values not available, pls check the 2nd argument of 'decode' and 2nd return of 'encode'`)
@@ -31,19 +34,40 @@ local function not_available_unknowns(): { any }
 	return setmetatable({}, { __index = warn_not_available }) :: any
 end
 
-local function realloc(prev)
+local function reset_workspace()
+	cursor = 0
+	fail = false
+	unknowns = {}
+end
+local function free_workspace(): (buffer, { any })
+	local copy = buffer.create(cursor)
+	buffer.copy(copy, 0, working_buf, 0, cursor)
+
+	if fail then error 'some values couldnt be serialized' end
+	return copy, unknowns
+end
+local function load_workspace(input: buffer, input_unknowns: { any }?)
+	local input_len = buffer.len(input) + WORST_MISSING_BYTES_CASE
+	working_buf = if input_len < limit then working_buf else buffer.create(input_len)
+	buffer.copy(working_buf, 0, input)
+
+	unknowns = input_unknowns or not_available_unknowns()
+	cursor = 0
+end
+
+local function realloc()
 	local old = working_buf
 
-	working_buf = buffer.create(math.max(cursor, buffer.len(old) * 2))
+	limit = math.max(cursor, limit * 2)
+	working_buf = buffer.create(limit)
 	buffer.copy(working_buf, 0, old)
-
-	return prev
 end
 local function ensure_size(bytes: number): number
 	local prev = cursor
 	cursor += bytes
 
-	return if cursor > buffer.len(working_buf) then realloc(prev) else prev
+	if cursor > limit then realloc() end
+	return prev
 end
 local function advance(bytes: number): number
 	local prev = cursor
@@ -81,6 +105,7 @@ local function pop_u32(): number
 	return buffer.readu32(working_buf, advance(4))
 end
 
+-- unrolled varint up to u32 implementation for speed
 local function push_varint(num: number)
 	if num < 0x80 then
 		push_u8(num)
@@ -134,17 +159,7 @@ end
 local push_size, pop_size = push_varint, pop_varint
 
 -- functions
-local function push_value(value: any)
-	local type = typeof(value)
-	local tag = type_to_tags[type] or 1
-
-	push_u8(tag)
-	push[tag](value)
-end
-local function pop_value(): any
-	local tag = pop_u8()
-	return pop[tag]()
-end
+local push_tab, pop_tab
 
 local function push_unknown(value: any)
 	local existing_index = table.find(unknowns, value)
@@ -209,7 +224,50 @@ local function pop_vec(): vector
 	)
 end
 
-local function push_tab(tab: table)
+local function push_buf(buf: buffer)
+	local len = buffer.len(buf)
+	push_size(len)
+
+	local offset = ensure_size(len)
+	buffer.copy(working_buf, offset, buf, 0, len)
+end
+local function pop_buf(): buffer
+	local len = pop_size()
+	local output_buf = buffer.create(len)
+
+	buffer.copy(output_buf, 0, working_buf, advance(len), len)
+	return output_buf
+end
+
+local function push_value(value: any)
+	local type = typeof(value)
+	local tag = type_to_tags[type] or 1
+
+	push_u8(tag)
+	return if tag == 1
+		then push_unknown(value)
+		elseif tag == 2 then push_nil(value)
+		elseif tag == 3 then push_bool(value)
+		elseif tag == 4 then push_num(value)
+		elseif tag == 5 then push_str(value)
+		elseif tag == 6 then push_vec(value)
+		elseif tag == 7 then push_tab(value)
+		else push_buf(value)
+end
+local function pop_value(): any
+	local tag = pop_u8()
+	return if tag == 1
+		then pop_unknown()
+		elseif tag == 2 then pop_nil()
+		elseif tag == 3 then pop_bool()
+		elseif tag == 4 then pop_num()
+		elseif tag == 5 then pop_str()
+		elseif tag == 6 then pop_vec()
+		elseif tag == 7 then pop_tab()
+		else pop_buf()
+end
+
+function push_tab(tab: table): ()
 	local hash_len = 0
 	local seq_len = 0
 
@@ -231,7 +289,7 @@ local function push_tab(tab: table)
 		push_value(v)
 	end
 end
-local function pop_tab(): table
+function pop_tab(): table
 	local arr_len = pop_size()
 	local hash_len = pop_size()
 
@@ -245,82 +303,38 @@ local function pop_tab(): table
 	return out
 end
 
-local function push_buf(buf: buffer)
-	local len = buffer.len(buf)
-	push_size(len)
-
-	local offset = ensure_size(len)
-	buffer.copy(working_buf, offset, buf, 0, len)
-end
-local function pop_buf(): buffer
-	local len = pop_size()
-	local output_buf = buffer.create(len)
-
-	buffer.copy(output_buf, 0, working_buf, advance(len), len)
-	return output_buf
-end
-
-push = { push_unknown, push_nil, push_bool, push_num, push_str, push_vec, push_tab, push_buf }
-pop = { pop_unknown, pop_nil, pop_bool, pop_num, pop_str, pop_vec, pop_tab, pop_buf }
-
--- lifecycle
-local function begin_encode()
-	cursor = 0
-	fail = false
-	unknowns = {}
-	if buffer.len(working_buf) < 256 then working_buf = buffer.create(1024) end
-end
-local function finish_encode(): (buffer, { any })
-	local copy = buffer.create(cursor)
-	buffer.copy(copy, 0, working_buf, 0, cursor)
-
-	if fail then error 'some values couldnt be serialized' end
-	return copy, unknowns
-end
-local function begin_decode(input: buffer, input_unknowns: { any }?)
-	working_buf = buffer.create(buffer.len(input) + WORST_MISSING_BYTES_CASE)
-	buffer.copy(working_buf, 0, input)
-
-	unknowns = input_unknowns or not_available_unknowns()
-	cursor = 0
-end
-
 -- module
 local function encode(value: any): (buffer, { any })
-	begin_encode()
+	reset_workspace()
 	push_value(value)
-	return finish_encode()
+	return free_workspace()
 end
 local function decode(input: buffer, input_unknowns: { any }?): any
-	local prev = working_buf
-	begin_decode(input, input_unknowns)
-	local value = pop_value()
-
-	working_buf = prev
-	return value
+	load_workspace(input, input_unknowns)
+	return pop_value()
 end
 
 -- module
 return table.freeze {
+	-- user api
 	encode = encode,
 	decode = decode,
 
-	-- lifecycle
-	begin_encode = begin_encode,
-	finish_encode = finish_encode,
-	begin_decode = begin_decode,
+	-- internal workspace
+	begin_encode = reset_workspace,
+	finish_encode = free_workspace,
+	begin_decode = load_workspace,
 
-	-- value codec
-	push_value = push_value,
-	pop_value = pop_value,
-
-	-- primitives
+	-- internal datatypes
 	push_u8 = push_u8,
 	push_u16 = push_u16,
 	push_u32 = push_u32,
+	push_value = push_value,
 	push_varint = push_varint,
+
 	pop_u8 = pop_u8,
 	pop_u16 = pop_u16,
 	pop_u32 = pop_u32,
+	pop_value = pop_value,
 	pop_varint = pop_varint,
 }
