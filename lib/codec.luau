@@ -21,6 +21,7 @@ local type_to_tags = {
 }
 
 -- helpers
+export type codec_impl<Data, Encoded...> = { encode: (Data) -> Encoded..., decode: (Encoded...) -> Data }
 type table = { [any]: any }
 
 local function warn_not_available()
