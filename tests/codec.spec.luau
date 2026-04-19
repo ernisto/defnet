@@ -163,6 +163,56 @@ function test.should_error_when_encoding_nan()
 	assert(ok == false)
 end
 
+function test.should_roundtrip_varint_boundaries()
+	local cases = {
+		0,
+		1,
+		127, -- 1 byte max
+		128, -- 2 byte min
+		16383, -- 2 byte max
+		16384, -- 3 byte min
+		2097151, -- 3 byte max
+		2097152, -- 4 byte min
+		268435455, -- 4 byte max (2^28 - 1)
+	}
+	for _, n in cases do
+		codec.begin_encode()
+		codec.push_varint(n)
+		local encoded = codec.finish_encode()
+
+		codec.begin_decode(encoded)
+		local decoded = codec.pop_varint()
+		assert(decoded == n, `varint roundtrip failed for {n}: got {decoded}`)
+	end
+end
+
+function test.should_use_expected_byte_count_for_varints()
+	local cases = {
+		{ value = 0, bytes = 1 },
+		{ value = 127, bytes = 1 },
+		{ value = 128, bytes = 2 },
+		{ value = 16383, bytes = 2 },
+		{ value = 16384, bytes = 3 },
+		{ value = 2097151, bytes = 3 },
+		{ value = 2097152, bytes = 4 },
+	}
+	for _, case in cases do
+		codec.begin_encode()
+		codec.push_varint(case.value)
+		local encoded = codec.finish_encode()
+
+		assert(buffer.len(encoded) == case.bytes, `varint {case.value} expected {case.bytes} bytes, got {buffer.len(encoded)}`)
+	end
+end
+
+function test.should_roundtrip_long_string_with_varint_length()
+	local input = string.rep('x', 200) -- forces 2-byte varint length prefix
+	local encoded, unknowns = codec.encode(input)
+	local decoded = codec.decode(encoded, unknowns)
+
+	assert(decoded == input)
+end
+
 function test.should_error_when_encoding_non_ascii_string()
 	local non_ascii = 'cafe com acento: caf' .. utf8.char(0xE9)
 	local ok, _ = pcall(function()

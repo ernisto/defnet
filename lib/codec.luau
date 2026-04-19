@@ -31,17 +31,19 @@ local function not_available_unknowns(): { any }
 	return setmetatable({}, { __index = warn_not_available }) :: any
 end
 
-local function ensure_size(bytes: number): number
-	local prev = cursor
-	cursor += bytes
-
-	if cursor <= buffer.len(working_buf) then return prev end
+local function realloc(prev)
 	local old = working_buf
 
 	working_buf = buffer.create(math.max(cursor, buffer.len(old) * 2))
 	buffer.copy(working_buf, 0, old)
 
 	return prev
+end
+local function ensure_size(bytes: number): number
+	local prev = cursor
+	cursor += bytes
+
+	return if cursor > buffer.len(working_buf) then realloc(prev) else prev
 end
 local function advance(bytes: number): number
 	local prev = cursor
@@ -57,13 +59,16 @@ end
 
 -- primitives
 local function push_u8(n: number)
-	buffer.writeu8(working_buf, ensure_size(1), n)
+	local offset = ensure_size(1)
+	buffer.writeu8(working_buf, offset, n)
 end
 local function push_u16(n: number)
-	buffer.writeu16(working_buf, ensure_size(2), n)
+	local offset = ensure_size(2)
+	buffer.writeu16(working_buf, offset, n)
 end
 local function push_u32(n: number)
-	buffer.writeu32(working_buf, ensure_size(4), n)
+	local offset = ensure_size(4)
+	buffer.writeu32(working_buf, offset, n)
 	fail = fail or math.isnan(n)
 end
 local function pop_u8(): number
@@ -123,7 +128,7 @@ local function pop_varint(): number
 	num += (byte4 % 0x80) * 0x200000
 
 	advance(4)
-	return num + (byte4 % 0x80) * 0x200000
+	return num
 end
 
 local push_size, pop_size = push_varint, pop_varint
@@ -274,7 +279,7 @@ local function finish_encode(): (buffer, { any })
 end
 local function begin_decode(input: buffer, input_unknowns: { any }?)
 	working_buf = buffer.create(buffer.len(input) + WORST_MISSING_BYTES_CASE)
-	buffer.copy(input, 0, working_buf)
+	buffer.copy(working_buf, 0, input)
 
 	unknowns = input_unknowns or not_available_unknowns()
 	cursor = 0
