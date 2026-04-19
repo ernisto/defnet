@@ -1,7 +1,7 @@
 local Players = game:GetService 'Players'
 local RunService = game:GetService 'RunService'
 
-local serde = require './serde'
+local codec = require './codec'
 
 local is_client = RunService:IsClient()
 local remote_func_debug_event = script:FindFirstChild 'RemoteFunctionEvent.profiler' :: BindableEvent
@@ -10,8 +10,8 @@ local remote_func_debug_event = script:FindFirstChild 'RemoteFunctionEvent.profi
 remote_func_debug_event.Name = 'RemoteFunctionEvent.profiler'
 
 -- defs
-type serde_impl<Data, Encoded...> = { encode: (Data) -> Encoded..., decode: (Encoded...) -> Data }
-type remote_desc<T> = { class: string, serde: serde_impl<T, ...any>? }
+type codec_impl<Data, Encoded...> = { encode: (Data) -> Encoded..., decode: (Encoded...) -> Data }
+type remote_desc<T> = { class: string, codec: codec_impl<T, ...any>? }
 
 export type event_type<T...> = {
 	fire_server: (T...) -> (),
@@ -29,8 +29,8 @@ export type func_type<T..., R...> = {
 	on_client_invoke: (T...) -> R...,
 }
 
-local function event<T...>(serde: serde_impl<any, ...any>?): event_type<T...>
-	return { class = 'RemoteEvent', serde = serde } :: any
+local function event<T...>(codec: codec_impl<any, ...any>?): event_type<T...>
+	return { class = 'RemoteEvent', codec = codec } :: any
 end
 local function func<T..., R...>(): func_type<T..., R...>
 	return { class = 'RemoteFunction' } :: any
@@ -39,8 +39,8 @@ end
 -- functions
 
 local function wrap_event<T...>(remote: RemoteEvent, desc: remote_desc<any>)
-	local impl = desc.serde
-	if impl == serde then remote:AddTag 'preserved' end
+	local impl = desc.codec
+	if impl == codec then remote:AddTag 'preserved' end
 
 	return table.freeze {
 		fire_server = function(...: T...)
@@ -170,7 +170,7 @@ end
 
 -- module
 return table.freeze {
-	preserved = serde :: serde_impl<any, ...any>,
+	preserved = codec :: codec_impl<any, ...any>,
 	remotes = remotes,
 	event = event,
 	preserved_event = event,

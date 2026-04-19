@@ -1,5 +1,5 @@
 local suites = {
-	require './serde.spec',
+	require './codec.spec',
 }
 
 local function is_test(name: string, value: any): boolean

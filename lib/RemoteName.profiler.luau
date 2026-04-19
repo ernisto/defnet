@@ -1,4 +1,4 @@
-local serde = require './serde'
+local codec = require './codec'
 
 return function(event: UnreliableRemoteEvent | RemoteEvent | RemoteFunction, player: Player, args: { any })
 	if not event:HasTag 'preserved' then return end
@@ -7,7 +7,7 @@ return function(event: UnreliableRemoteEvent | RemoteEvent | RemoteFunction, pla
 	return {
 		{
 			Name = event:GetFullName():gsub(script.Parent:GetFullName() .. '.', ''),
-			Data = { serde.decode(args[1], args[2]) },
+			Data = { codec.decode(args[1], args[2]) },
 		},
 	}
 end

@@ -19,14 +19,14 @@ stylua --check lib/ tests/
 `vendor/net` is a small Roblox networking library. Three files:
 
 - `lib/lib.luau` — public API. `event<T...>()` and `func<T..., R...>()` are declaration helpers used in `shared/net.luau`. `remotes(def, root?)` instantiates or waits for the actual `RemoteEvent`/`RemoteFunction` instances and wraps them. Server creates; client `WaitForChild`.
-- `lib/serde.luau` — binary buffer serializer. `encode(value) -> (buffer, unknowns)` / `decode(buffer, unknowns?) -> value`. Handles nil, bool, number (f64), string (ASCII only), vector (3×f32), table (seq+hash), buffer. Non-serializable values go into the `unknowns` side-channel array by reference.
+- `lib/codec.luau` — binary buffer serializer. `encode(value) -> (buffer, unknowns)` / `decode(buffer, unknowns?) -> value`. Handles nil, bool, number (f64), string (ASCII only), vector (3×f32), table (seq+hash), buffer. Non-serializable values go into the `unknowns` side-channel array by reference.
 - `lib/RemoteName.profiler.luau` — Roblox Studio profiler hook. Decodes `preserved`-tagged remote payloads for the network profiler panel.
 
 ## Key Behaviors
 
-- `event(serde)` — pass `serde` module as argument to enable binary encoding on that remote. The remote gets tagged `'preserved'` so the profiler can decode it.
+- `event(codec)` — pass `codec` module as argument to enable binary encoding on that remote. The remote gets tagged `'preserved'` so the profiler can decode it.
 - `event()` with no argument — raw Roblox values, no encoding.
-- `serde.encode` errors on NaN, non-ASCII strings, and recursive tables.
+- `codec.encode` errors on NaN, non-ASCII strings, and recursive tables.
 - Unknown/non-serializable values (instances, coroutines, etc.) are passed through the `unknowns` side-channel — they don't cross the network wire.
 - `remotes()` mutates the definition table in-place and freezes it. Call once at module load.
 
