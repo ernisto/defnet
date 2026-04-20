@@ -14,7 +14,10 @@ local type_to_tags = {
 	['buffer'] = 8,
 }
 
-export type codec_impl<Data, Encoded...> = { encode: (Data) -> Encoded..., decode: (Encoded...) -> Data }
+export type codec_impl<Data, Encoded... = (buffer, { any }?)> = {
+	encode: (Data) -> Encoded...,
+	decode: (Encoded...) -> Data,
+}
 type table = { [any]: any }
 
 -- workspace

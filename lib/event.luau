@@ -1,6 +1,7 @@
 local Players = game:GetService 'Players'
 
 local codec = require '../utils/codec'
+local codecs = {}
 
 -- defs
 type remote_desc<T> = { class: string, codec: codec.codec_impl<T, ...any>? }
@@ -20,7 +21,7 @@ local function define<T...>(codec: codec.codec_impl<any, ...any>?): event_type<T
 	return { class = 'RemoteEvent', codec = codec } :: any
 end
 local function wrap_codec<T>(remote: RemoteEvent, codec_impl: codec.codec_impl<T>): event_type<(T)>
-	if codec_impl == codec then remote:AddTag 'preserved' end
+	codecs[remote] = codec_impl
 
 	return table.freeze {
 		fire_server = function(t: T)
@@ -90,4 +91,4 @@ local function wrap<T...>(remote: RemoteEvent, desc: remote_desc<any>): event_ty
 end
 
 -- module
-return table.freeze { define = define, wrap = wrap }
+return table.freeze { codecs = codecs, define = define, wrap = wrap }

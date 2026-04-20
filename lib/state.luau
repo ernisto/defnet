@@ -6,6 +6,7 @@ local diff_codec = require '../utils/diff_codec'
 local sync = require '../utils/sync'
 
 local is_client = RunService:IsClient()
+local idxs = {}
 
 -- defs
 type remote_desc<T> = { class: string, default: T? }
@@ -25,6 +26,8 @@ end
 
 local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 	local idx = diff_codec.build_index(desc.default)
+	idxs[remote] = idx
+
 	if is_client then
 		local self = { client = desc.default or {} }
 		remote.OnClientEvent:Connect(function(buf: buffer, unknowns: { any })
@@ -64,4 +67,4 @@ if not is_client then
 end
 
 -- module
-return table.freeze { define = define, wrap = wrap, step_sync = step_sync }
+return table.freeze { idxs = idxs, define = define, wrap = wrap, step_sync = step_sync }
