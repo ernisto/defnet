@@ -1,6 +1,7 @@
 local RunService = game:GetService 'RunService'
 local is_client = RunService:IsClient()
 
+local codec = require '../utils/codec'
 local event = require './event'
 local func = require './func'
 local state = require './state'
@@ -39,6 +40,8 @@ end
 
 -- module
 return table.freeze {
+	codec = codec,
+
 	remotes = define_remotes,
 	event = event.define,
 	func = func.define,

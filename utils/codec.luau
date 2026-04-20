@@ -31,7 +31,7 @@ local cursor = 0
 local fail = false
 
 local function warn_not_available()
-	warn(`unknown values not available, pls check the 2nd argument of 'decode' and 2nd return of 'encode'`)
+	print(`unknown values not available, pls check the 2nd argument of 'decode' and 2nd return of 'encode'`)
 end
 local function not_available_unknowns(): { any }
 	return setmetatable({}, { __index = warn_not_available }) :: any
@@ -243,7 +243,7 @@ local function pop_buf(): buffer
 end
 
 local function push_value(value: any)
-	local type = typeof(value)
+	local type = type(value)
 	local tag = type_to_tags[type] or 1
 
 	push_u8(tag)
@@ -320,8 +320,7 @@ end
 -- module
 return table.freeze {
 	-- user api
-	encode = encode,
-	decode = decode,
+	impl = { encode = encode, decode = decode },
 
 	-- internal workspace
 	reset_workspace = reset_workspace,

@@ -1,7 +1,8 @@
 [package]
 name = "ernisto/defnet"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
+license = "MIT"
+description = "A simple network definition library."
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
-
-[dependencies]
+include = ["default.project.json", "LICENSE", "lib", "utils"]
