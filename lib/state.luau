@@ -11,6 +11,7 @@ local idxs = {}
 -- defs
 type remote_desc<T> = { class: string, default: T? }
 export type state_type<T> = {
+	changed: (() -> ()) -> (),
 	codec: codec.codec_impl<T>?,
 	step: (Player?) -> (),
 	server: { [Player]: T },
@@ -29,24 +30,35 @@ local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 	idxs[remote] = idx
 
 	if is_client then
-		local self = { client = desc.default or {} }
+		local function listen_changed(listener)
+			remote.OnClientEvent:Connect(listener)
+		end
+
+		local self = { changed = listen_changed, client = desc.default or {} }
 		remote.OnClientEvent:Connect(function(buf: buffer, unknowns: { any })
 			sync.apply(idx, self.client, buf, unknowns)
 		end)
 		return self :: any
 	end
 
+	local listeners = {}
 	local function send(player: Player, packet)
 		remote:FireClient(player, packet.buf, packet.unknowns)
+		for _, listener in listeners do
+			task.spawn(listener :: any)
+		end
 	end
 
 	local syncer = sync.create { idx = idx, send = send }
 	local function step(player: Player?)
 		sync.step(syncer, player)
 	end
+	local function listen_changed(listener)
+		table.insert(listeners, listener)
+	end
 
 	table.insert(registry, syncer)
-	return table.freeze { step = step, server = syncer.targets } :: any
+	return table.freeze { listen_changed = listen_changed, step = step, server = syncer.targets } :: any
 end
 
 local function step_sync(player: Player?)
