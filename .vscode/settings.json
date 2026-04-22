@@ -16,6 +16,7 @@
     ".zed": true,
     "sourcemap.json": true,
     "stylua.toml": true,
+    "rokit.toml": true,
     "wally.toml": true
   },
   "files.readonlyInclude": {

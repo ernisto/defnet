@@ -1,0 +1,57 @@
+name: Check
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches-ignore: [ master, dev ]
+  push:
+    branches-ignore: [ master, dev ]
+
+jobs:
+  check-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your Git repo
+        uses: actions/checkout@v2
+
+      - name: Check Format
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ github.token }}
+          version: 2.4.1
+          args: --config-path stylua.toml --check lib tests
+
+  lint-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your git repo
+        uses: actions/checkout@v2
+
+      - name: Setup rokit
+        uses: CompeyDev/setup-rokit@v0.1.2
+        with:
+          token: ${{ github.token }}
+
+      - name: Lint
+        run: >
+          luau-lsp analyze --base-luaurc .luaurc --ignore **/luau_packages/**
+          lib tests
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your Git repo
+        uses: actions/checkout@v2
+
+      - name: Setup rokit
+        uses: CompeyDev/setup-rokit@v0.1.2
+        with:
+          token: ${{ github.token }}
+
+      - name: Run tests
+        run: lute tests/runner.luau

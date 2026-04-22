@@ -1,19 +1,20 @@
-# defnet
+# defnet [![Tests](https://github.com/ernisto/defnet/actions/workflows/check.yml/badge.svg)](https://github.com/ernisto/defnet/actions/workflows/check.yml)
 
 Small Roblox networking library. Declare remotes once, share the module between server and client. Optional binary codec and server-authoritative replicated state.
 
-## Install
+## Installation
 
-Insert in your wally.toml
+- Download (`defnet.rbxm`) from [latest release](https://github.com/ernisto/defnet/releases/latest)
+
+- Wally (`wally.toml`): add under `[dependencies]`
 ```toml
-[dependencies]
-net = "ernisto/defnet@0.1.0-alpha.2"
+defnet = "ernisto/defnet@0.1.0-alpha.2"
 ```
-Or install with pesde
-```bash
+
+- Pesde in roblox (terminal):
+```sh
 pesde add wally#ernisto/defnet
 ```
-
 
 ## Declare remotes
 

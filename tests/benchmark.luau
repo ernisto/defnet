@@ -21,6 +21,17 @@ local function section(title: string)
 	print(`== {title} ==`)
 end
 
+-- helpers
+local function encode(v)
+	codec.reset_workspace()
+	codec.push_value(v)
+	return codec.free_workspace()
+end
+local function decode(buff, unk)
+	codec.load_workspace(buff, unk)
+	return codec.pop_value()
+end
+
 -- fixtures
 local small_table = {
 	id = 'player_42',
@@ -73,8 +84,8 @@ end
 local diff_large = make_diff_large(1024)
 
 -- sizes
-local small_buf = codec.encode(small_table)
-local large_buf = codec.encode(large_table)
+local small_buf = encode(small_table)
+local large_buf = encode(large_table)
 local diff_small_buf = diff_codec.encode(diff_small, idx)
 local diff_small_no_schema_buf = diff_codec.encode(diff_small, empty_idx)
 local diff_large_buf = diff_codec.encode(diff_large, idx)
@@ -90,16 +101,16 @@ print(`iterations per bench: {ITERATIONS}`)
 
 section 'codec'
 bench('encode small table', function()
-	codec.encode(small_table)
+	encode(small_table)
 end)
 bench('decode small table', function()
-	codec.decode(small_buf)
+	decode(small_buf)
 end)
 bench('encode large table (n=1024)', function()
-	codec.encode(large_table)
+	encode(large_table)
 end)
 bench('decode large table (n=1024)', function()
-	codec.decode(large_buf)
+	decode(large_buf)
 end)
 
 section 'varint'
