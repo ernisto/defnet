@@ -1,11 +1,18 @@
 local fs = require '@lute/fs'
 local process = require '@lute/process'
 
-local result = process.run { 'git', 'describe', '--tags', '--abbrev=0' }
-assert(result.ok, `git describe failed: {result.stderr}`)
+local result = process.run {
+	'git',
+	'for-each-ref',
+	'--sort=-creatordate',
+	'--format=%(refname:short)',
+	'--count=1',
+	'refs/tags',
+}
+assert(result.ok, `git for-each-ref failed: {result.stderr}`)
 
 local tag = result.stdout:match '^%s*(.-)%s*$'
-if not tag then
+if tag == '' then
 	print 'no tag found'
 	return
 end
