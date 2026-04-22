@@ -18,7 +18,8 @@
     "sourcemap.json": true,
     "stylua.toml": true,
     "rokit.toml": true,
-    "wally.toml": true
+    "wally.toml": true,
+    "scripts": true,
   },
   "files.readonlyInclude": {
     "**/LICENSE": true,

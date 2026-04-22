@@ -25,6 +25,9 @@ jobs:
           WALLY_TOKEN: ${{ secrets.WALLY_TOKEN }}
           GH_TOKEN: ${{ github.token }}
 
+      - name: Sync wally version
+        run: lute run scripts/bump_version
+
       - name: Publish wally
         run: wally publish
 
