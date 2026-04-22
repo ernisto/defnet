@@ -37,10 +37,23 @@ jobs:
         with:
           token: ${{ github.token }}
 
+      - name: Map source
+        run: >
+          rojo sourcemap -o sourcemap.json
+
+      - name: Map environment
+        run: >
+          mkdir dist curl -L
+          https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/refs/heads/main/scripts/globalTypes.d.luau
+          -o dist/roblox.d.luau curl -L
+          https://gist.githubusercontent.com/ernisto/3b0e3513700e20ccf8011efc77de234e/raw/3b140bcb8d6d7953d628bb3f3b6cf49d9784fbaf/vector.d.luau
+          -o dist/vector.d.luau
+
       - name: Lint
         run: >
-          luau-lsp analyze --base-luaurc .luaurc --ignore **/luau_packages/**
-          lib tests
+          luau-lsp analyze --base-luaurc .luaurc --platform roblox --sourcemap
+          sourcemap.json --defs dist/roblox.d.luau --defs dist/vector.d.luau lib
+          tests
 
   unit-tests:
     runs-on: ubuntu-latest
