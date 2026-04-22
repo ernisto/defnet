@@ -2,6 +2,17 @@ local codec = require '../utils/codec'
 
 local test = {}
 
+-- helpers
+local function encode(v)
+	codec.reset_workspace()
+	codec.push_value(v)
+	return codec.free_workspace()
+end
+local function decode(buff, unk)
+	codec.load_workspace(buff, unk)
+	return codec.pop_value()
+end
+
 local function assert_buffer_equal(a: buffer, b: buffer)
 	assert(buffer.len(a) == buffer.len(b), 'buffer lengths differ')
 
@@ -12,54 +23,94 @@ local function assert_buffer_equal(a: buffer, b: buffer)
 	end
 end
 
+-- primitives
 function test.should_roundtrip_nil()
-	local encoded, unknowns = codec.encode(nil)
-	local decoded = codec.decode(encoded, unknowns)
+	local encoded, unknowns = encode(nil)
+	local decoded = decode(encoded, unknowns)
 
 	assert(decoded == nil)
 	assert(unknowns == nil)
 end
 
 function test.should_roundtrip_booleans()
-	local encoded_true, unknowns_true = codec.encode(true)
-	local encoded_false, unknowns_false = codec.encode(false)
+	local encoded_true, unknowns_true = encode(true)
+	local encoded_false, unknowns_false = encode(false)
 
-	assert(codec.decode(encoded_true, unknowns_true) == true)
-	assert(codec.decode(encoded_false, unknowns_false) == false)
+	assert(decode(encoded_true, unknowns_true) == true)
+	assert(decode(encoded_false, unknowns_false) == false)
 end
 
 function test.should_roundtrip_number()
 	local input = -123.456
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
 
 	assert(decoded == input)
 end
 
 function test.should_roundtrip_ascii_string()
 	local input = 'hello serializer'
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
 
 	assert(decoded == input)
 end
 
 function test.should_roundtrip_empty_string()
 	local input = ''
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert(decoded == input)
+end
+
+function test.should_roundtrip_long_string_with_varint_length()
+	local input = string.rep('x', 200) -- forces 2-byte varint length prefix
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
 
 	assert(decoded == input)
 end
 
 function test.should_roundtrip_vector()
 	local input = vector.create(1.5, -2.25, 300.125)
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
 
 	assert(decoded.x == input.x)
 	assert(decoded.y == input.y)
 	assert(decoded.z == input.z)
+end
+
+function test.should_roundtrip_buffer()
+	local input = buffer.create(4)
+	buffer.writeu8(input, 0, 12)
+	buffer.writeu8(input, 1, 34)
+	buffer.writeu8(input, 2, 56)
+	buffer.writeu8(input, 3, 78)
+
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert_buffer_equal(decoded, input)
+end
+
+function test.should_roundtrip_empty_buffer()
+	local input = buffer.create(0)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert_buffer_equal(decoded, input)
+end
+
+-- tables
+function test.should_roundtrip_empty_table()
+	local input = {}
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert(type(decoded) == 'table')
+	assert(next(decoded) == nil)
 end
 
 function test.should_roundtrip_table_with_array_and_hash_parts()
@@ -74,8 +125,8 @@ function test.should_roundtrip_table_with_array_and_hash_parts()
 			name = 'nested',
 		},
 	}
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
 
 	assert(decoded[1] == 1)
 	assert(decoded[2] == 2)
@@ -86,83 +137,37 @@ function test.should_roundtrip_table_with_array_and_hash_parts()
 	assert(decoded.nested.name == 'nested')
 end
 
-function test.should_roundtrip_buffer()
-	local input = buffer.create(4)
-	buffer.writeu8(input, 0, 12)
-	buffer.writeu8(input, 1, 34)
-	buffer.writeu8(input, 2, 56)
-	buffer.writeu8(input, 3, 78)
+-- unknowns side-channel
+function test.should_roundtrip_unknown_values_with_unknown_list()
+	local unknown = coroutine.create(function() end)
+	local encoded, unknowns = encode(unknown)
 
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
-
-	assert_buffer_equal(decoded, input)
-end
-
-function test.should_roundtrip_empty_buffer()
-	local input = buffer.create(0)
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
-
-	assert_buffer_equal(decoded, input)
-end
-
-function test.should_roundtrip_empty_table()
-	local input = {}
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
-
-	assert(type(decoded) == 'table')
-	assert(next(decoded) == nil)
+	local decoded = decode(encoded, unknowns)
+	assert(decoded == unknown)
 end
 
 function test.should_track_unknown_values_once()
 	local unknown = coroutine.create(function() end)
 	local input = { first = unknown, second = unknown }
 
-	local _, unknowns = codec.encode(input)
+	local _, unknowns = encode(input)
 
 	assert(unknowns and #unknowns == 1)
 	assert(unknowns[1] == unknown)
 end
 
-function test.should_roundtrip_unknown_values_with_unknown_list()
-	local unknown = coroutine.create(function() end)
-	local encoded, unknowns = codec.encode(unknown)
-
-	local decoded = codec.decode(encoded, unknowns)
-	assert(decoded == unknown)
-end
-
 function test.should_serialize_duplicated_table_values()
 	local shared = { x = 1, y = 2 }
 	local input = { first = shared, second = shared }
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
 
 	assert(decoded.first.x == 1 and decoded.first.y == 2)
 	assert(decoded.second.x == 1 and decoded.second.y == 2)
 	assert(decoded.first ~= decoded.second)
 end
 
-function test.should_error_when_encoding_recursive_table()
-	local input = {}
-	input.self = input
-
-	local ok, _ = pcall(function()
-		codec.encode(input)
-	end)
-	assert(ok == false)
-end
-
-function test.should_error_when_encoding_nan()
-	local ok, _ = pcall(function()
-		codec.encode(0 / 0)
-	end)
-
-	assert(ok == false)
-end
-
+-- varint primitives (internal building block)
 function test.should_roundtrip_varint_boundaries()
 	local cases = {
 		0,
@@ -208,21 +213,32 @@ function test.should_use_expected_byte_count_for_varints()
 	end
 end
 
-function test.should_roundtrip_long_string_with_varint_length()
-	local input = string.rep('x', 200) -- forces 2-byte varint length prefix
-	local encoded, unknowns = codec.encode(input)
-	local decoded = codec.decode(encoded, unknowns)
+-- errors / edge cases
+function test.should_error_when_encoding_nan()
+	local ok, _ = pcall(function()
+		encode(0 / 0)
+	end)
 
-	assert(decoded == input)
+	assert(ok == false)
 end
 
 function test.should_error_when_encoding_non_ascii_string()
 	local non_ascii = 'cafe com acento: caf' .. utf8.char(0xE9)
 	local ok, _ = pcall(function()
 		codec.encode 'cafe com acento: cafe'
-		codec.encode(non_ascii)
+		encode(non_ascii)
 	end)
 
+	assert(ok == false)
+end
+
+function test.should_error_when_encoding_recursive_table()
+	local input = {}
+	input.self = input
+
+	local ok, _ = pcall(function()
+		encode(input)
+	end)
 	assert(ok == false)
 end
 

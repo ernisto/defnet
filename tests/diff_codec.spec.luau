@@ -26,6 +26,7 @@ local function assert_path_equal(a: { any }, b: { any })
 	end
 end
 
+-- empty
 function test.should_roundtrip_empty_diff()
 	local encoded, unknowns = diff_codec.encode(empty_diff, empty_idx)
 	local decoded = diff_codec.decode(encoded, unknowns, empty_idx)
@@ -36,6 +37,7 @@ function test.should_roundtrip_empty_diff()
 	assert(#decoded.shift_removes == 0)
 end
 
+-- changes: schema-known paths
 function test.should_roundtrip_change_with_known_schema_path()
 	local idx = diff_codec.build_index { coins = 0, level = 0 }
 	local diff = make_diff {
@@ -50,6 +52,20 @@ function test.should_roundtrip_change_with_known_schema_path()
 	assert(decoded.changes[1].value == 42)
 end
 
+function test.should_roundtrip_nested_known_path()
+	local idx = diff_codec.build_index { pets = { [1] = { name = '', level = 0 } } }
+	local diff = make_diff {
+		changes = { { path = { 'pets', 1 :: any, 'name' }, value = 'rex' } },
+	}
+
+	local encoded, unknowns = diff_codec.encode(diff, idx)
+	local decoded = diff_codec.decode(encoded, unknowns, idx)
+
+	assert_path_equal(decoded.changes[1].path, { 'pets', 1, 'name' })
+	assert(decoded.changes[1].value == 'rex')
+end
+
+-- changes: paths outside the schema
 function test.should_roundtrip_change_with_unknown_path()
 	local idx = diff_codec.build_index { coins = 0 }
 	local diff = make_diff {
@@ -75,19 +91,6 @@ function test.should_roundtrip_change_with_nil_schema()
 	assert(decoded.changes[1].value == 1)
 end
 
-function test.should_roundtrip_nested_known_path()
-	local idx = diff_codec.build_index { pets = { [1] = { name = '', level = 0 } } }
-	local diff = make_diff {
-		changes = { { path = { 'pets', 1 :: any, 'name' }, value = 'rex' } },
-	}
-
-	local encoded, unknowns = diff_codec.encode(diff, idx)
-	local decoded = diff_codec.decode(encoded, unknowns, idx)
-
-	assert_path_equal(decoded.changes[1].path, { 'pets', 1, 'name' })
-	assert(decoded.changes[1].value == 'rex')
-end
-
 function test.should_roundtrip_mixed_known_prefix_with_unknown_suffix()
 	local idx = diff_codec.build_index { inventory = {} }
 	local diff = make_diff {
@@ -101,6 +104,7 @@ function test.should_roundtrip_mixed_known_prefix_with_unknown_suffix()
 	assert(decoded.changes[1].value == 1)
 end
 
+-- diff parts
 function test.should_roundtrip_removes()
 	local idx = diff_codec.build_index { coins = 0, level = 0 }
 	local diff = make_diff {
@@ -174,6 +178,7 @@ function test.should_roundtrip_combined_diff()
 	assert(decoded.shift_removes[1].index == 5)
 end
 
+-- value preservation
 function test.should_preserve_value_types_in_changes()
 	local idx = diff_codec.build_index { a = 0, b = 0, c = 0, d = 0 }
 	local diff = make_diff {
@@ -194,22 +199,6 @@ function test.should_preserve_value_types_in_changes()
 	assert(decoded.changes[4].value == nil)
 end
 
-function test.should_preserve_number_key_vs_string_key()
-	local idx = diff_codec.build_index { pets = { [1] = {} } }
-	local diff = make_diff {
-		changes = {
-			{ path = { 'pets', 1 :: any }, value = 'known_numeric' },
-			{ path = { 'pets', '1' }, value = 'string_one' },
-		},
-	}
-
-	local encoded, unknowns = diff_codec.encode(diff, idx)
-	local decoded = diff_codec.decode(encoded, unknowns, idx)
-
-	assert(decoded.changes[1].path[2] == 1 and type(decoded.changes[1].path[2]) == 'number')
-	assert(decoded.changes[2].path[2] == '1' and type(decoded.changes[2].path[2]) == 'string')
-end
-
 function test.should_track_unknowns_in_diff_values()
 	local idx = diff_codec.build_index { ref = nil }
 	local unknown = coroutine.create(function() end)
@@ -224,6 +213,7 @@ function test.should_track_unknowns_in_diff_values()
 	assert(decoded.changes[1].value == unknown)
 end
 
+-- perf / edge
 function test.should_benefit_from_schema_enumeration()
 	local idx = diff_codec.build_index { some_long_field_name = 0, another_long_name = 0 }
 	local diff = make_diff {
@@ -237,6 +227,22 @@ function test.should_benefit_from_schema_enumeration()
 		buffer.len(with_schema) < buffer.len(without_schema),
 		`schema should save bytes: {buffer.len(with_schema)} vs {buffer.len(without_schema)}`
 	)
+end
+
+function test.should_preserve_number_key_vs_string_key()
+	local idx = diff_codec.build_index { pets = { [1] = {} } }
+	local diff = make_diff {
+		changes = {
+			{ path = { 'pets', 1 :: any }, value = 'known_numeric' },
+			{ path = { 'pets', '1' }, value = 'string_one' },
+		},
+	}
+
+	local encoded, unknowns = diff_codec.encode(diff, idx)
+	local decoded = diff_codec.decode(encoded, unknowns, idx)
+
+	assert(decoded.changes[1].path[2] == 1 and type(decoded.changes[1].path[2]) == 'number')
+	assert(decoded.changes[2].path[2] == '1' and type(decoded.changes[2].path[2]) == 'string')
 end
 
 return test
