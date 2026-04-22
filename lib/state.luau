@@ -1,9 +1,9 @@
 local Players = game:GetService 'Players'
 local RunService = game:GetService 'RunService'
 
-local codec = require '../utils/codec'
-local diff_codec = require '../utils/diff_codec'
-local sync = require '../utils/sync'
+local codec = require './utils/codec'
+local diff_codec = require './utils/diff_codec'
+local sync = require './utils/sync'
 
 local is_client = RunService:IsClient()
 local idxs = {}

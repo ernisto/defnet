@@ -1,6 +1,6 @@
 local Players = game:GetService 'Players'
 
-local codec = require '../utils/codec'
+local codec = require './utils/codec'
 local codecs = {}
 
 -- defs

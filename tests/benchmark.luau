@@ -1,6 +1,6 @@
-local codec = require '../utils/codec'
-local diff = require '../utils/diff'
-local diff_codec = require '../utils/diff_codec'
+local codec = require '../lib/utils/codec'
+local diff = require '../lib/utils/diff'
+local diff_codec = require '../lib/utils/diff_codec'
 
 local ITERATIONS = 1000
 

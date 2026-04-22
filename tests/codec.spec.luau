@@ -1,4 +1,4 @@
-local codec = require '../utils/codec'
+local codec = require '../lib/utils/codec'
 
 local test = {}
 

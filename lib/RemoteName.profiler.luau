@@ -1,4 +1,4 @@
-local diff_codec = require '../utils/diff_codec'
+local diff_codec = require './utils/diff_codec'
 
 local event = require './event'
 local state = require './state'

@@ -1,7 +1,7 @@
 local RunService = game:GetService 'RunService'
 local is_client = RunService:IsClient()
 
-local codec = require '../utils/codec'
+local codec = require './utils/codec'
 local event = require './event'
 local func = require './func'
 local state = require './state'

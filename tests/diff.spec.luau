@@ -1,4 +1,4 @@
-local diff = require '../utils/diff'
+local diff = require '../lib/utils/diff'
 
 local test = {}
 

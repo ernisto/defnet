@@ -5,4 +5,4 @@ license = "MIT"
 description = "A simple network definition library."
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
-include = ["default.project.json", "LICENSE", "lib", "utils"]
+include = ["default.project.json", "LICENSE", "lib"]

@@ -1,4 +1,4 @@
-local diff_codec = require '../utils/diff_codec'
+local diff_codec = require '../lib/utils/diff_codec'
 
 local test = {}
 
@@ -207,7 +207,7 @@ function test.should_track_unknowns_in_diff_values()
 	}
 
 	local encoded, unknowns = diff_codec.encode(diff, idx)
-	assert(#unknowns == 1 and unknowns[1] == unknown)
+	assert(unknowns and #unknowns == 1 and unknowns[1] == unknown)
 
 	local decoded = diff_codec.decode(encoded, unknowns, idx)
 	assert(decoded.changes[1].value == unknown)

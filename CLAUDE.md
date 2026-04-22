@@ -11,10 +11,10 @@ luau tests/runner.luau
 luau -O2 --codegen tests/benchmark.luau
 
 # Format
-stylua lib/ utils/ tests/
+stylua lib/ tests/
 
 # Check formatting
-stylua --check lib/ utils/ tests/
+stylua --check lib/ tests/
 ```
 
 ### `lib/` — API glue
@@ -22,15 +22,15 @@ stylua --check lib/ utils/ tests/
 - `lib/lib.luau` — public entry. Re-exports `event`, `func`, `state`, `step_sync`, and `remotes(def, root?)`. `remotes` walks the definition tree, instantiates or `WaitForChild`s the actual `RemoteEvent`/`RemoteFunction`/`Folder` instances, wraps them, mutates the def in-place, and freezes it. Server creates; client waits. Call once at module load.
 - `lib/event.luau` — `event<T...>(codec?)` declaration + `wrap` for `RemoteEvent`. Exposes `fire_server`, `fire_client`, `fire_all`, `fire_list`, `fire_except`, `on_client`, `on_server`. With a codec, payloads go through `encode`/`decode` and the remote gets tagged `'preserved'`.
 - `lib/func.luau` — `func<T..., R...>()` declaration + `wrap` for `RemoteFunction`. Exposes `invoke_server`, `invoke_client`, and `on_server_invoke` / `on_client_invoke` (assigned via `__newindex` so they route to the real `OnServerInvoke` / `OnClientInvoke`). Fires a `BindableEvent` (`RemoteFunctionEvent.profiler`) on both call and reply for the profiler.
-- `lib/state.luau` — `state<T>(default?)` declaration + `wrap`. Server side owns a `syncer` (from `utils/sync`) with a `targets` map keyed by `Player`. On `Heartbeat`, every registered syncer diffs each target's current state against its last snapshot and fires only the diff. Client side receives `(buf, unknowns)` and applies via `sync.apply`. Exposes `step(player?)` for manual sync and `step_sync()` to flush all registered syncers.
+- `lib/state.luau` — `state<T>(default?)` declaration + `wrap`. Server side owns a `syncer` (from `lib/utils/sync`) with a `targets` map keyed by `Player`. On `Heartbeat`, every registered syncer diffs each target's current state against its last snapshot and fires only the diff. Client side receives `(buf, unknowns)` and applies via `sync.apply`. Exposes `step(player?)` for manual sync and `step_sync()` to flush all registered syncers.
 - `lib/RemoteName.profiler.luau` — Roblox Studio profiler hook. Decodes `preserved`-tagged remote payloads for the network profiler panel.
 
-### `utils/` — algorithms
+### `lib/utils/` — algorithms
 
-- `utils/codec.luau` — binary buffer serializer. `encode(value) -> (buffer, unknowns)` / `decode(buffer, unknowns?) -> value`. Handles nil, bool, number (f64), string (ASCII only), vector (3×f32), table (seq+hash), buffer. Non-serializable values (instances, coroutines, etc.) go into the `unknowns` side-channel array by reference — they don't cross the wire. Exports `push_value` / `pop_value` / `push_varint` / `pop_varint` for other encoders built on the shared buffer/cursor. `--!native`. Errors on NaN, non-ASCII strings, recursive tables.
-- `utils/diff.luau` — pure diff algorithm over nested tables. `compute(prev, curr) -> diff`, `apply(state, diff)`, `clone`, `has_any`. Diff is `{ changes, removes, shift_insertions, shift_removes }` so array shifts encode as a single op instead of N changes.
-- `utils/diff_codec.luau` — encode/decode a `diff` into the codec's shared buffer. `build_index(default) -> schema_index` precomputes ids for every path in the schema so paths encode as `(varint schema_node_id, varint unknown_len, unknown keys...)` instead of full path traversal. `encode(diff, idx)` / `decode(buf, unknowns, idx)` require the prebuilt index — no fallback rebuild.
-- `utils/sync.luau` — per-receiver diff/send loop. `create { idx, send }` returns a `syncer<Receiver>` with `targets` and `snapshots`. `step(syncer, target?)` diffs each target's current value against its snapshot, encodes once per `curr` (memoized by reference), sends, and updates the snapshot. `remove(syncer, target)` drops both. `apply(idx, state, buf, unknowns)` decodes and applies on the receiver.
+- `lib/utils/codec.luau` — binary buffer serializer. `encode(value) -> (buffer, unknowns)` / `decode(buffer, unknowns?) -> value`. Handles nil, bool, number (f64), string (ASCII only), vector (3×f32), table (seq+hash), buffer. Non-serializable values (instances, coroutines, etc.) go into the `unknowns` side-channel array by reference — they don't cross the wire. Exports `push_value` / `pop_value` / `push_varint` / `pop_varint` for other encoders built on the shared buffer/cursor. `--!native`. Errors on NaN, non-ASCII strings, recursive tables.
+- `lib/utils/diff.luau` — pure diff algorithm over nested tables. `compute(prev, curr) -> diff`, `apply(state, diff)`, `clone`, `has_any`. Diff is `{ changes, removes, shift_insertions, shift_removes }` so array shifts encode as a single op instead of N changes.
+- `lib/utils/diff_codec.luau` — encode/decode a `diff` into the codec's shared buffer. `build_index(default) -> schema_index` precomputes ids for every path in the schema so paths encode as `(varint schema_node_id, varint unknown_len, unknown keys...)` instead of full path traversal. `encode(diff, idx)` / `decode(buf, unknowns, idx)` require the prebuilt index — no fallback rebuild.
+- `lib/utils/sync.luau` — per-receiver diff/send loop. `create { idx, send }` returns a `syncer<Receiver>` with `targets` and `snapshots`. `step(syncer, target?)` diffs each target's current value against its snapshot, encodes once per `curr` (memoized by reference), sends, and updates the snapshot. `remove(syncer, target)` drops both. `apply(idx, state, buf, unknowns)` decodes and applies on the receiver.
 
 ### `tests/`
 
@@ -52,7 +52,7 @@ stylua --check lib/ utils/ tests/
 
 Enforced by stylua (`stylua.toml`): single quotes, no call parentheses for single args, Unix line endings, sorted requires, Luau syntax. Tests named `should_*`.
 
-- Keep algorithms (`utils/`) decoupled from remote/API glue (`lib/`). Don't import `lib/` from `utils/`.
+- Keep algorithms (`lib/utils/`) decoupled from remote/API glue (`lib/`). Don't import `lib/` from `lib/utils/`.
 - Single quotes preferred (`AutoPreferSingle`)
 - No parentheses around single-argument calls (`call_parentheses = 'None'`)
 - Requires are sorted (`sort_requires.enabled = true`)
