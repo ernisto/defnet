@@ -1,10 +1,10 @@
 local RunService = game:GetService 'RunService'
 local is_client = RunService:IsClient()
 
-local codec = require './utils/codec'
-local event = require './event'
-local func = require './func'
-local state = require './state'
+local codec = require '@self/utils/codec'
+local event = require '@self/event'
+local func = require '@self/func'
+local state = require '@self/state'
 
 type remote_desc<T> = { class: string }
 
