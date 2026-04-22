@@ -116,15 +116,29 @@ local function walk_parent(root: any, path: { any }): (any, any)
 	local t = root
 	for i = 1, #path - 1 do
 		local key = path[i]
-		if t[key] == nil then t[key] = {} end
-		t = t[key]
+		local child = t[key]
+		if child == nil then
+			child = {}
+		elseif type(child) == 'table' and table.isfrozen(child) then
+			child = table.clone(child)
+		else
+			t = child
+			continue
+		end
+		t[key] = child
+		t = child
 	end
 	return t, path[#path]
 end
 local function walk(root: any, path: { any }): any
 	local t = root
 	for _, k in path do
-		t = t[k]
+		local child = t[k]
+		if type(child) == 'table' and table.isfrozen(child) then
+			child = table.clone(child)
+			t[k] = child
+		end
+		t = child
 	end
 	return t
 end
