@@ -225,7 +225,7 @@ end
 function test.should_error_when_encoding_non_ascii_string()
 	local non_ascii = 'cafe com acento: caf' .. utf8.char(0xE9)
 	local ok, _ = pcall(function()
-		codec.encode 'cafe com acento: cafe'
+		encode 'cafe com acento: cafe'
 		encode(non_ascii)
 	end)
 
