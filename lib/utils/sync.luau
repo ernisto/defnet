@@ -3,7 +3,7 @@ local diff_algo = require './diff'
 local diff_codec = require './diff_codec'
 
 -- defs
-type packet = { buf: buffer, unknowns: { any }? }
+export type packet = { buf: buffer, unknowns: { any }? }
 export type syncer<Receiver> = {
 	send: (target: Receiver, packet) -> (),
 	targets: { [Receiver]: any },

@@ -3,14 +3,13 @@ local sync = require '../lib/utils/sync'
 
 local test = {}
 
-type packet = { buf: buffer, unknowns: { any } }
-type msg = { target: string, buf: buffer, unknowns: { any } }
+type msg = { target: string, buf: buffer, unknowns: { any }? }
 
 local function make_syncer(schema: any?): (sync.syncer<string>, { msg })
 	local sent: { msg } = {}
 	local s = sync.create {
 		default = schema,
-		send = function(target: string, p: packet)
+		send = function(target: string, p: sync.packet)
 			table.insert(sent, { target = target, buf = p.buf, unknowns = p.unknowns })
 		end,
 	}

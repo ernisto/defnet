@@ -81,9 +81,9 @@ function test.should_roundtrip_vector()
 	local encoded, unknowns = encode(input)
 	local decoded = decode(encoded, unknowns)
 
-	assert(decoded.x == input.x)
-	assert(decoded.y == input.y)
-	assert(decoded.z == input.z)
+	assert(decoded.x == input.X)
+	assert(decoded.y == input.Y)
+	assert(decoded.z == input.Z)
 end
 
 function test.should_roundtrip_buffer()

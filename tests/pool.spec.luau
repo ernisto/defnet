@@ -5,15 +5,14 @@ local sync = require '../lib/utils/sync'
 local test = {}
 
 -- helpers
-type packet = { buf: buffer, unknowns: { any } }
-type msg = { target: string, buf: buffer, unknowns: { any } }
+type msg = { target: string, buf: buffer, unknowns: { any }? }
 
 local function make_syncer_with_pools(schema: any?, pools: { [string]: codec.pool }): (sync.syncer<string>, { msg })
 	local sent: { msg } = {}
 	local s = sync.create {
 		default = schema,
 		pools = pools,
-		send = function(target: string, p: packet)
+		send = function(target: string, p: sync.packet)
 			table.insert(sent, { target = target, buf = p.buf, unknowns = p.unknowns })
 		end,
 	}

@@ -262,10 +262,10 @@ end
 local function push_vec(vec: vector)
 	local offset = ensure_size(3 * 32 / 8)
 
-	buffer.writef32(working_buf, offset + 0, vec.x)
-	buffer.writef32(working_buf, offset + 4, vec.y)
-	buffer.writef32(working_buf, offset + 8, vec.z)
-	fail = fail or math.isnan(vec.x + vec.y + vec.z)
+	buffer.writef32(working_buf, offset + 0, vec.X)
+	buffer.writef32(working_buf, offset + 4, vec.Y)
+	buffer.writef32(working_buf, offset + 8, vec.Z)
+	fail = fail or math.isnan(vec.X + vec.Y + vec.Z)
 end
 local function pop_vec(): vector
 	return vector.create(
