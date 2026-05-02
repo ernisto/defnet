@@ -1,6 +1,7 @@
 local Players = game:GetService 'Players'
 
 local codec = require './utils/codec'
+local scan_nan = require './utils/scan_nan'
 local codecs = {}
 
 -- defs
@@ -47,12 +48,16 @@ local function wrap_codec<T>(remote: RemoteEvent, codec_impl: codec.codec_impl<T
 		end,
 		on_client = function(handler: (T) -> ())
 			return remote.OnClientEvent:Connect(function(...)
-				handler(codec_impl.decode(...))
+				local data = codec_impl.decode(...)
+				scan_nan.scan(data)
+				handler(data)
 			end)
 		end,
 		on_server = function(handler: (Player, T) -> ())
 			return remote.OnServerEvent:Connect(function(player: Player, ...)
-				handler(player, codec_impl.decode(...))
+				local data = codec_impl.decode(...)
+				scan_nan.scan(data)
+				handler(player, data)
 			end)
 		end,
 	}
@@ -82,10 +87,16 @@ local function wrap<T...>(remote: RemoteEvent, desc: remote_desc<any>): event_ty
 			end
 		end,
 		on_client = function(handler: (T...) -> ())
-			return remote.OnClientEvent:Connect(handler :: any)
+			return remote.OnClientEvent:Connect(function(...)
+				scan_nan.scan_args(...)
+				handler(...)
+			end :: any)
 		end,
 		on_server = function(handler: (Player, T...) -> ())
-			return remote.OnServerEvent:Connect(handler :: any)
+			return remote.OnServerEvent:Connect(function(player: Player, ...)
+				scan_nan.scan_args(...)
+				handler(player, ...)
+			end :: any)
 		end,
 	}
 end

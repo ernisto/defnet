@@ -1,3 +1,5 @@
+local scan_nan = require './utils/scan_nan'
+
 local remote_func_debug_event = script:FindFirstChild 'RemoteFunctionEvent.profiler' :: BindableEvent
 	or Instance.new('BindableEvent', script)
 
@@ -31,15 +33,22 @@ local function wrap<T>(remote: RemoteFunction, desc: remote_desc<T>)
 			remote_func_debug_event:Fire(remote, ...)
 			local reply = { remote:InvokeClient(player, ...) }
 
+			scan_nan.scan_args(unpack(reply))
 			remote_func_debug_event:Fire(remote, unpack(reply))
 			return unpack(reply)
 		end,
 	}, {
 		__newindex = function(self, key, value)
 			if key == 'on_server_invoke' then
-				remote.OnServerInvoke = value
+				remote.OnServerInvoke = function(player: Player, ...)
+					scan_nan.scan_args(...)
+					return value(player, ...)
+				end
 			elseif key == 'on_client_invoke' then
-				remote.OnClientInvoke = value
+				remote.OnClientInvoke = function(...)
+					scan_nan.scan_args(...)
+					return value(...)
+				end
 			else
 				rawset(self, key, value)
 			end
