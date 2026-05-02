@@ -9,6 +9,7 @@ type msg = { target: string, buf: buffer, unknowns: { any } }
 local function make_syncer(schema: any?): (sync.syncer<string>, { msg })
 	local sent: { msg } = {}
 	local s = sync.create {
+		default = schema,
 		idx = diff_codec.build_index(schema),
 		send = function(target: string, p: packet)
 			table.insert(sent, { target = target, buf = p.buf, unknowns = p.unknowns })
@@ -153,6 +154,27 @@ function test.should_stop_sending_after_remove()
 
 	assert(#sent == 1, 'no messages after remove')
 	assert(s.snapshots.p1 == nil)
+end
+
+-- diff against default
+function test.should_send_only_changed_field_against_default_for_new_target()
+	local s, sent = make_syncer { persistent = 0, mutable = 0 }
+	local world = { persistent = 0, mutable = 100 }
+	s.targets.p1 = world
+	sync.step(s)
+
+	assert(#sent == 1)
+	local d = diff_codec.decode(sent[1].buf, sent[1].unknowns, s.idx)
+	assert(#d.removes == 0 and #d.shift_insertions == 0 and #d.shift_removes == 0)
+	assert(#d.changes == 1, `expected 1 change, got {#d.changes}`)
+
+	local change = d.changes[1]
+	assert(#change.path == 1 and change.path[1] == 'mutable')
+	assert(change.value == 100)
+
+	local client: any = { persistent = 0, mutable = 0 }
+	apply_msg(client, s.idx, sent[1])
+	assert(client.persistent == 0 and client.mutable == 100)
 end
 
 function test.should_emit_nothing_when_no_change()

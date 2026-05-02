@@ -41,6 +41,13 @@ end
 local function has_any(diff: diff): boolean
 	return #diff.changes > 0 or #diff.removes > 0 or #diff.shift_insertions > 0 or #diff.shift_removes > 0
 end
+local function display_path(path: { any })
+	local out = ''
+	for _, key in path do
+		out ..= '.' .. tostring(key)
+	end
+	return string.sub(out, 1, -2)
+end
 
 -- compute diff
 local write_diff
@@ -128,6 +135,7 @@ local function walk_parent(root: any, path: { any }): (any, any)
 		t[key] = child
 		t = child
 	end
+	if table.isfrozen(t) then return end
 	return t, path[#path]
 end
 local function walk(root: any, path: { any }): any
@@ -145,10 +153,18 @@ end
 local function apply(root: any, diff: diff)
 	for _, c in diff.changes do
 		local parent, key = walk_parent(root, c.path)
+		if not parent then
+			warn(`couldnt apply change for {display_path(c.path)}`)
+			continue
+		end
 		parent[key] = c.value
 	end
 	for _, r in diff.removes do
 		local parent, key = walk_parent(root, r.path)
+		if not parent then
+			warn(`couldnt apply change for {display_path(r.path)}`)
+			continue
+		end
 		parent[key] = nil
 	end
 	for _, s in diff.shift_insertions do

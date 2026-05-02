@@ -1,8 +1,6 @@
 local diff_algo = require './diff'
 local diff_codec = require './diff_codec'
 
-local EMPTY = table.freeze {} :: any
-
 -- defs
 type packet = { buf: buffer, unknowns: { any } }
 export type syncer<Receiver> = {
@@ -10,13 +8,16 @@ export type syncer<Receiver> = {
 	send: (target: Receiver, packet) -> (),
 	targets: { [Receiver]: any },
 	snapshots: { [Receiver]: any },
+	default: any,
 }
 
 -- functions
-local function create<Receiver>(
-	params: { idx: diff_codec.schema_index, send: (target: Receiver, packet) -> () }
-): syncer<Receiver>
-	return { idx = params.idx, send = params.send, targets = {}, snapshots = {} }
+local function create<Receiver>(params: {
+	default: any,
+	idx: diff_codec.schema_index,
+	send: (target: Receiver, packet) -> (),
+}): syncer<Receiver>
+	return { default = params.default, idx = params.idx, send = params.send, targets = {}, snapshots = {} }
 end
 local function remove<Receiver>(syncer: syncer<Receiver>, target: Receiver)
 	syncer.targets[target] = nil
@@ -54,7 +55,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 
 	local function send_one(target: Receiver)
 		local curr = syncer.targets[target]
-		local prev = syncer.snapshots[target] or EMPTY
+		local prev = syncer.snapshots[target] or syncer.default
 
 		local packet = ensure_encoded(prev, curr)
 		if packet then syncer.send(target, packet :: any) end
