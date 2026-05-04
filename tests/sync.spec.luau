@@ -163,13 +163,16 @@ function test.should_send_only_changed_field_against_default_for_new_target()
 	sync.step(s)
 
 	assert(#sent == 1)
-	local d = diff_codec.decode(sent[1].buf, sent[1].unknowns)
-	assert(#d.removes == 0 and #d.shift_insertions == 0 and #d.shift_removes == 0)
-	assert(#d.changes == 1, `expected 1 change, got {#d.changes}`)
+	local d = diff_codec.impl.decode(sent[1].buf, sent[1].unknowns)
+	assert(#d.removes == 0 and #d.shift_inserts == 0 and #d.shift_removes == 0)
+	assert(next(d.children) == nil, 'expected no nested children')
 
-	local change = d.changes[1]
-	assert(#change.path == 1 and change.path[1] == 'mutable')
-	assert(change.value == 100)
+	local changes_count = 0
+	for _ in d.changes do
+		changes_count += 1
+	end
+	assert(changes_count == 1, `expected 1 change, got {changes_count}`)
+	assert(d.changes.mutable == 100, `expected mutable=100, got {d.changes.mutable}`)
 
 	local client: any = { persistent = 0, mutable = 0 }
 	apply_msg(client, sent[1])

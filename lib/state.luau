@@ -2,7 +2,7 @@ local Players = game:GetService 'Players'
 local RunService = game:GetService 'RunService'
 
 local codec = require './utils/codec'
-local diff_algo = require './utils/diff'
+local diff = require './utils/diff'
 local sync = require './utils/sync'
 
 local is_client = RunService:IsClient()
@@ -48,7 +48,7 @@ local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 		end
 	end
 
-	local syncer = sync.create { default = diff_algo.clone(desc.default), send = send }
+	local syncer = sync.create { default = diff.snapshot(desc.default), send = send }
 	local function step(player: Player?)
 		sync.step(syncer, player)
 	end

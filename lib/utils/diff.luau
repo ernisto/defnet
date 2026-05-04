@@ -1,184 +1,161 @@
-local diff_codec = require './diff_codec'
+--!native
 
-type diff = diff_codec.diff
+type diff_node = {
+	children: { [any]: diff_node },
+	shift_inserts: { { index: number, value: any } },
+	shift_removes: { number },
+	changes: { [any]: any },
+	removes: { any },
+}
+
+-- workspace
+local cache: { [any]: { [any]: diff_node } } = setmetatable({}, { __mode = 'k' }) :: any
 
 -- helpers
-local function deep_clone(v: any): any
-	if type(v) ~= 'table' then return v end
+local function reset_cache()
+	table.clear(cache)
+end
+
+local function deep_clone(value: any): any
+	if type(value) ~= 'table' then return value end
 	local out = {}
-	for k, value in v do
-		out[k] = deep_clone(value)
+	for key, sub in value do
+		out[key] = deep_clone(sub)
 	end
 	return out
 end
-local function deep_equal(a: any, b: any): boolean
-	if a == b then return true end
-	if type(a) ~= 'table' or type(b) ~= 'table' then return false end
 
-	for k, v in a do
-		if not deep_equal(v, b[k]) then return false end
-	end
-	for k in b do
-		if a[k] == nil then return false end
-	end
-	return true
-end
-local function is_array(t: { [any]: any }): boolean
-	local n = #t
-	if n == 0 then return false end
-
-	local count = 0
-	for _ in t do
-		count += 1
-	end
-	return count == n
-end
-local function sub_path(path: { any }, key: any): { any }
-	local out = table.clone(path)
-	table.insert(out, key)
-	return out
-end
-local function has_any(diff: diff): boolean
-	return #diff.changes > 0 or #diff.removes > 0 or #diff.shift_insertions > 0 or #diff.shift_removes > 0
-end
-local function display_path(path: { any })
-	local out = ''
-	for _, key in path do
-		out ..= '.' .. tostring(key)
-	end
-	return string.sub(out, 1, -2)
+local function empty_node(): diff_node
+	return { children = {}, shift_inserts = {}, shift_removes = {}, changes = {}, removes = {} }
 end
 
--- compute diff
-local write_diff
-local function write_array_diff(prev: { any }, curr: { any }, path: { any }, diff: diff)
-	local plen, clen = #prev, #curr
-	local max_pref = math.min(plen, clen)
+local function is_empty(node: diff_node): boolean
+	return next(node.changes) == nil
+		and #node.removes == 0
+		and #node.shift_inserts == 0
+		and #node.shift_removes == 0
+		and next(node.children) == nil
+end
 
-	local prefix = 0
-	while prefix < max_pref and deep_equal(prev[prefix + 1], curr[prefix + 1]) do
-		prefix += 1
+local function is_array_index(key: any, max_len: number): boolean
+	return type(key) == 'number' and key % 1 == 0 and key >= 1 and key <= max_len
+end
+
+local function from<T>(prev: any, curr: any): diff_node
+	local by_curr = cache[prev]
+	if by_curr then
+		local hit = by_curr[curr]
+		if hit then return hit end
+	else
+		by_curr = {}
+		cache[prev] = by_curr
 	end
 
-	local suffix = 0
-	while suffix < max_pref - prefix and deep_equal(prev[plen - suffix], curr[clen - suffix]) do
-		suffix += 1
-	end
+	local node = empty_node()
+	by_curr[curr] = node
 
-	local prev_mid = plen - prefix - suffix
-	local curr_mid = clen - prefix - suffix
-	local overlap = math.min(prev_mid, curr_mid)
+	local count_prev = #prev
+	local count_curr = #curr
+	local array_len = math.max(count_prev, count_curr)
 
-	for k = 1, overlap do
-		local idx = prefix + k
-		local pv, cv = prev[idx], curr[idx]
-		if type(pv) == 'table' and type(cv) == 'table' then
-			write_diff(pv, cv, sub_path(path, idx), diff)
-		elseif pv ~= cv then
-			table.insert(diff.changes, { path = sub_path(path, idx), value = cv })
+	if array_len > 0 then
+		local index_curr = count_curr
+		local index_prev = count_prev
+		local delta = count_curr - count_prev
+
+		while index_curr >= 1 or index_prev >= 1 do
+			local matched = false
+			local sub: diff_node?
+
+			if index_curr >= 1 and index_prev >= 1 then
+				local prev_value = prev[index_prev]
+				local curr_value = curr[index_curr]
+				if prev_value == curr_value then
+					matched = true
+				elseif type(prev_value) == 'table' and type(curr_value) == 'table' then
+					sub = from(prev_value, curr_value)
+					matched = is_empty(sub :: any)
+				end
+			end
+
+			if matched then
+				index_curr -= 1
+				index_prev -= 1
+			elseif delta > 0 then
+				table.insert(node.shift_inserts, 1, { index = index_curr, value = curr[index_curr] })
+				index_curr -= 1
+				delta -= 1
+			elseif delta < 0 then
+				table.insert(node.shift_removes, index_prev)
+				index_prev -= 1
+				delta += 1
+			else
+				if sub then
+					node.children[index_prev] = sub
+				else
+					node.changes[index_prev] = curr[index_curr]
+				end
+				index_curr -= 1
+				index_prev -= 1
+			end
 		end
 	end
 
-	if curr_mid > prev_mid then
-		for k = overlap + 1, curr_mid do
-			local idx = prefix + k
-			table.insert(diff.shift_insertions, { path = path, index = idx, value = curr[idx] })
-		end
-	elseif prev_mid > curr_mid then
-		for k = prev_mid, overlap + 1, -1 do
-			local idx = prefix + k
-			table.insert(diff.shift_removes, { path = path, index = idx })
-		end
-	end
-end
-function write_diff(prev: any, curr: any, path: { any }, diff: diff)
-	if is_array(prev) and is_array(curr) then
-		write_array_diff(prev, curr, path, diff)
-		return
-	end
+	for key, value in curr do
+		if is_array_index(key, array_len) then continue end
 
-	for k, v in prev do
-		local cv = curr[k]
-		if cv == nil then
-			table.insert(diff.removes, { path = sub_path(path, k) })
-		elseif type(v) == 'table' and type(cv) == 'table' then
-			write_diff(v, cv, sub_path(path, k), diff)
-		elseif v ~= cv then
-			table.insert(diff.changes, { path = sub_path(path, k), value = cv })
-		end
-	end
-	for k, v in curr do
-		if prev[k] == nil then table.insert(diff.changes, { path = sub_path(path, k), value = v }) end
-	end
-end
+		local prev_value = prev[key]
+		if prev_value == value then continue end
 
-local function compute(prev: any, curr: any): diff
-	local diff: diff = { changes = {}, removes = {}, shift_insertions = {}, shift_removes = {} }
-	write_diff(prev, curr, {}, diff)
-	return diff
-end
-
--- apply diff
-local function walk_parent(root: any, path: { any }): (any, any)
-	local t = root
-	for i = 1, #path - 1 do
-		local key = path[i]
-		local child = t[key]
-		if child == nil then
-			child = {}
-		elseif type(child) == 'table' and table.isfrozen(child) then
-			child = table.clone(child)
+		if type(prev_value) == 'table' and type(value) == 'table' then
+			local sub = from(prev_value, value)
+			if not is_empty(sub) then node.children[key] = sub end
 		else
-			t = child
-			continue
+			node.changes[key] = value
 		end
-		t[key] = child
-		t = child
 	end
-	if table.isfrozen(t) then return end
-	return t, path[#path]
+	for key in prev do
+		if is_array_index(key, array_len) then continue end
+
+		if curr[key] ~= nil then continue end
+		table.insert(node.removes, key)
+	end
+
+	return node
 end
-local function walk(root: any, path: { any }): any
-	local t = root
-	for _, k in path do
-		local child = t[k]
-		if type(child) == 'table' and table.isfrozen(child) then
-			child = table.clone(child)
-			t[k] = child
+
+local function apply(state: any, node: diff_node)
+	for index, value in node.changes do
+		state[index] = value
+	end
+	for _, key in node.removes do
+		state[key] = nil
+	end
+	for _, insertion in node.shift_inserts do
+		table.insert(state, insertion.index, insertion.value)
+	end
+	for _, index in node.shift_removes do
+		table.remove(state, index)
+	end
+
+	for key, child in node.children do
+		local nested = state[key]
+		if type(nested) ~= 'table' then
+			nested = {}
+			state[key] = nested
+		elseif table.isfrozen(nested) then
+			nested = table.clone(nested)
+			state[key] = nested
 		end
-		t = child
-	end
-	return t
-end
-local function apply(root: any, diff: diff)
-	for _, c in diff.changes do
-		local parent, key = walk_parent(root, c.path)
-		if not parent then
-			warn(`couldnt apply change for {display_path(c.path)}`)
-			continue
-		end
-		parent[key] = c.value
-	end
-	for _, r in diff.removes do
-		local parent, key = walk_parent(root, r.path)
-		if not parent then
-			warn(`couldnt apply change for {display_path(r.path)}`)
-			continue
-		end
-		parent[key] = nil
-	end
-	for _, s in diff.shift_insertions do
-		table.insert(walk(root, s.path), s.index, s.value)
-	end
-	for _, s in diff.shift_removes do
-		table.remove(walk(root, s.path), s.index)
+		apply(nested, child)
 	end
 end
 
+-- module
 return table.freeze {
-	compute = compute,
+	reset_cache = reset_cache,
+	snapshot = deep_clone,
+	is_empty = is_empty,
 	apply = apply,
-	clone = deep_clone,
-	equal = deep_equal,
-	has_any = has_any,
+	from = from,
 }

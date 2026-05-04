@@ -30,7 +30,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		local snapshot = snapshots[curr]
 		if snapshot then return snapshot end
 
-		snapshot = diff_algo.clone(curr)
+		snapshot = diff_algo.snapshot(curr)
 		snapshots[curr] = snapshot
 		return snapshot
 	end
@@ -39,9 +39,9 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		local packet = packets[curr]
 		if packet ~= nil then return packet end
 
-		local diff = diff_algo.compute(prev, curr)
-		if diff_algo.has_any(diff) then
-			local buf, unknowns = diff_codec.encode(diff)
+		local diff = diff_algo.from(prev, curr)
+		if not diff_algo.is_empty(diff) then
+			local buf, unknowns = diff_codec.impl.encode(diff)
 			packet = { buf = buf, unknowns = unknowns } :: any
 		else
 			packet = false :: any
@@ -61,19 +61,24 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		syncer.snapshots[target] = ensure_snapshot(curr)
 	end
 
-	if target ~= nil then return send_one(target) end
-	for t in syncer.targets do
-		send_one(t)
+	if target then
+		send_one(target)
+	else
+		for receiver in syncer.targets do
+			send_one(receiver)
+		end
 	end
 
 	-- remove snapshots
 	for receiver in syncer.snapshots do
 		if syncer.targets[receiver] == nil then syncer.snapshots[receiver] = nil end
 	end
+
+	diff_algo.reset_cache()
 end
 
 local function apply<T>(state: T, buf: buffer, unknowns: { any }?)
-	diff_algo.apply(state, diff_codec.decode(buf, unknowns))
+	diff_algo.apply(state, diff_codec.impl.decode(buf, unknowns))
 end
 
 return table.freeze { create = create, remove = remove, step = step, apply = apply }

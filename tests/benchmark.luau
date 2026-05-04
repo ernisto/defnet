@@ -1,5 +1,5 @@
 local codec = require '../lib/utils/codec'
-local diff = require '../lib/utils/diff'
+local diff_algo = require '../lib/utils/diff'
 local diff_codec = require '../lib/utils/diff_codec'
 
 local ITERATIONS = 1000
@@ -55,19 +55,32 @@ end
 local large_table = make_large_table(1024)
 
 local diff_small = {
+	children = {
+		stats = {
+			children = {},
+			removes = {},
+			shift_inserts = {},
+			shift_removes = {},
+			changes = {
+				hp = 49,
+			},
+		},
+	},
 	changes = {
-		{ path = { 'coins' }, value = 200 },
-		{ path = { 'stats', 'hp' }, value = 95 },
+		coins = 200,
 	},
 	removes = {},
-	shift_insertions = {},
+	shift_inserts = {},
 	shift_removes = {},
 }
 
 local function make_diff_large(n: number)
-	local diff = { changes = {}, removes = {}, shift_insertions = {}, shift_removes = {} }
+	local diff = diff_algo.from({}, {})
+	diff.changes.items = diff_algo.from({}, {})
+
 	for i = 1, n do
-		table.insert(diff.changes, { path = { 'items', i :: any, 'count' }, value = i })
+		diff.children[i] = diff_algo.from({}, {})
+		diff.children[i].changes.count = i
 	end
 	return diff
 end
@@ -77,8 +90,8 @@ local diff_large = make_diff_large(1024)
 -- sizes
 local small_buf = encode(small_table)
 local large_buf = encode(large_table)
-local diff_small_buf = diff_codec.encode(diff_small)
-local diff_large_buf = diff_codec.encode(diff_large)
+local diff_small_buf = diff_codec.impl.encode(diff_small)
+local diff_large_buf = diff_codec.impl.encode(diff_large)
 
 print 'payload sizes:'
 print(string.format('  small table          : %d bytes', buffer.len(small_buf)))
@@ -121,16 +134,16 @@ end)
 
 section 'diff_codec'
 bench('encode diff (small)', function()
-	diff_codec.encode(diff_small)
+	diff_codec.impl.encode(diff_small)
 end)
 bench('decode diff (small)', function()
-	diff_codec.decode(diff_small_buf)
+	diff_codec.impl.decode(diff_small_buf)
 end)
 bench('encode diff (large, n=1024)', function()
-	diff_codec.encode(diff_large)
+	diff_codec.impl.encode(diff_large)
 end)
 bench('decode diff (large, n=1024)', function()
-	diff_codec.decode(diff_large_buf)
+	diff_codec.impl.decode(diff_large_buf)
 end)
 
 -- diff fixtures
@@ -151,51 +164,43 @@ table.remove(large_curr_array_remove.items, 512)
 local nested_prev = { a = { b = { c = { d = { e = { f = 1 } } } } } }
 local nested_curr = { a = { b = { c = { d = { e = { f = 2 } } } } } }
 
-local diff_full_large = diff.compute({}, large_prev)
-local diff_scalar_large = diff.compute(large_prev, large_curr_scalar)
-local diff_insert_large = diff.compute(large_prev, large_curr_array_insert)
+local diff_full_large = diff_algo.from({}, large_prev)
+local diff_scalar_large = diff_algo.from(large_prev, large_curr_scalar)
+local diff_insert_large = diff_algo.from(large_prev, large_curr_array_insert)
 
 section 'diff compute'
 bench('compute equal (small)', function()
-	diff.compute(small_table, small_table)
+	diff_algo.from(small_table, small_table)
 end)
 bench('compute nested 6-deep change', function()
-	diff.compute(nested_prev, nested_curr)
+	diff_algo.from(nested_prev, nested_curr)
 end)
 bench('compute equal (large, n=1024)', function()
-	diff.compute(large_prev, large_curr_unchanged)
+	diff_algo.from(large_prev, large_curr_unchanged)
 end)
 bench('compute scalar change all rows (large, n=1024)', function()
-	diff.compute(large_prev, large_curr_scalar)
+	diff_algo.from(large_prev, large_curr_scalar)
 end)
 bench('compute array insert middle (large, n=1024)', function()
-	diff.compute(large_prev, large_curr_array_insert)
+	diff_algo.from(large_prev, large_curr_array_insert)
 end)
 bench('compute array remove middle (large, n=1024)', function()
-	diff.compute(large_prev, large_curr_array_remove)
+	diff_algo.from(large_prev, large_curr_array_remove)
 end)
 bench('compute from empty (large, n=1024)', function()
-	diff.compute({}, large_prev)
+	diff_algo.from({}, large_prev)
 end)
 
 section 'diff apply'
 bench('apply scalar change all rows (large, n=1024)', function()
-	local root = diff.clone(large_prev)
-	diff.apply(root, diff_scalar_large)
+	local root = diff_algo.snapshot(large_prev)
+	diff_algo.apply(root, diff_scalar_large)
 end)
 bench('apply array insert middle (large, n=1024)', function()
-	local root = diff.clone(large_prev)
-	diff.apply(root, diff_insert_large)
+	local root = diff_algo.snapshot(large_prev)
+	diff_algo.apply(root, diff_insert_large)
 end)
 bench('apply full populate (large, n=1024)', function()
 	local root = {}
-	diff.apply(root, diff_full_large)
-end)
-
-section 'diff helpers'
-bench('clone large table (n=1024)', function()
-	diff.clone(large_prev)
-end)
-bench('equal large equal (n=1024)', function()
-	diff.equal(large_prev, large_curr_unchanged)
+	diff_algo.apply(root, diff_full_large)
 end)

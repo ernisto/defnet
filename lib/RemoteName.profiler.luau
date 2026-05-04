@@ -25,7 +25,7 @@ return function(
 		return {
 			{
 				Name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', ''),
-				Data = { diff_codec.decode(args[1], args[2]) },
+				Data = { diff_codec.impl.decode(args[1], args[2]) },
 			},
 		}
 	end

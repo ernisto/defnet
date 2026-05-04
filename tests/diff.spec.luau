@@ -2,346 +2,452 @@ local diff = require '../lib/utils/diff'
 
 local test = {}
 
-local function assert_equal(a: any, b: any, msg: string?)
-	assert(diff.equal(a, b), msg or `not equal: {tostring(a)} vs {tostring(b)}`)
+-- helpers
+local function deep_equal(left: any, right: any): boolean
+	if left == right then return true end
+	if type(left) ~= 'table' or type(right) ~= 'table' then return false end
+	for key, value in left do
+		if not deep_equal(value, right[key]) then return false end
+	end
+	for key in right do
+		if left[key] == nil then return false end
+	end
+	return true
 end
 
-local empty = { changes = {}, removes = {}, shift_insertions = {}, shift_removes = {} }
-local function make(partial: any): any
-	local d = table.clone(empty)
-	for k, v in partial do
-		d[k] = v
+local function assert_equal(actual: any, expected: any, msg: string?)
+	assert(deep_equal(actual, expected), msg or `not equal: {tostring(actual)} vs {tostring(expected)}`)
+end
+
+local function count(map: { [any]: any }): number
+	local total = 0
+	for _ in map do
+		total += 1
 	end
-	return d
+	return total
+end
+
+local function is_empty(node: any): boolean
+	return next(node.changes) == nil
+		and #node.removes == 0
+		and #node.shift_inserts == 0
+		and #node.shift_removes == 0
+		and next(node.children) == nil
 end
 
 local function roundtrip(prev: any, curr: any)
-	local d = diff.compute(prev, curr)
-	local applied = diff.clone(prev)
-	diff.apply(applied, d)
+	local node = diff.from(prev, curr)
+	local applied = diff.snapshot(prev)
+	diff.apply(applied, node)
 	assert_equal(applied, curr, 'roundtrip mismatch')
-	return d
+	return node
 end
 
--- equal
-function test.should_equal_primitives()
-	assert(diff.equal(1, 1))
-	assert(diff.equal('x', 'x'))
-	assert(not diff.equal(1, 2))
-	assert(not diff.equal(1, '1'))
+-- snapshot
+function test.should_snapshot_independent()
+	local source = { coins = 10, stats = { hp = 5 }, items = { 1, 2, 3 } }
+	local copy = diff.snapshot(source)
+
+	assert_equal(copy, source)
+
+	copy.stats.hp = 99
+	copy.items[1] = 99
+
+	assert(source.stats.hp == 5 and source.items[1] == 1, 'snapshot mutation leaked into source')
 end
 
-function test.should_equal_nested_tables()
-	assert(diff.equal({ a = { b = 1 } }, { a = { b = 1 } }))
-	assert(not diff.equal({ a = { b = 1 } }, { a = { b = 2 } }))
+function test.should_snapshot_frozen_root_into_mutable()
+	local source = table.freeze { a = 1, b = 2 }
+	local copy = diff.snapshot(source)
+
+	assert_equal(copy, source)
+	assert(not table.isfrozen(copy), 'snapshot must be mutable')
+
+	copy.a = 99
+	assert(source.a == 1, 'snapshot mutation leaked into frozen source')
 end
 
-function test.should_detect_extra_key()
-	assert(not diff.equal({ a = 1 }, { a = 1, b = 2 }))
-	assert(not diff.equal({ a = 1, b = 2 }, { a = 1 }))
-end
-
--- clone
-function test.should_clone_independent()
-	local src = { a = { b = 1 }, list = { 1, 2, 3 } }
-	local dst = diff.clone(src)
-	assert(diff.equal(src, dst))
-	dst.a.b = 99
-	dst.list[1] = 99
-	assert(src.a.b == 1 and src.list[1] == 1, 'mutation leaked')
-end
-
-function test.should_clone_frozen_root()
-	local src = table.freeze { a = 1, b = 2 }
-	local dst = diff.clone(src)
-	assert(diff.equal(src, dst))
-	assert(not table.isfrozen(dst), 'clone must be mutable')
-	dst.a = 99
-	assert(src.a == 1, 'mutation leaked to frozen src')
-end
-
-function test.should_clone_frozen_nested()
-	local src = table.freeze {
-		a = table.freeze { b = 1 },
-		list = table.freeze { 1, 2, 3 },
+function test.should_snapshot_frozen_subtables_into_mutable()
+	local source = table.freeze {
+		stats = table.freeze { hp = 1 },
+		items = table.freeze { 1, 2 },
 	}
-	local dst = diff.clone(src)
-	assert(diff.equal(src, dst))
-	assert(not table.isfrozen(dst))
-	assert(not table.isfrozen(dst.a))
-	assert(not table.isfrozen(dst.list))
-	dst.a.b = 99
-	dst.list[1] = 99
-	assert(src.a.b == 1 and src.list[1] == 1, 'mutation leaked')
+	local copy = diff.snapshot(source)
+
+	assert(not table.isfrozen(copy.stats))
+	assert(not table.isfrozen(copy.items))
+
+	copy.stats.hp = 99
+	copy.items[1] = 99
+
+	assert(source.stats.hp == 1 and source.items[1] == 1)
 end
 
--- compute: empty / equal
-function test.should_emit_empty_diff_when_equal()
-	local d = diff.compute({ a = 1, b = 2 }, { a = 1, b = 2 })
-	assert(not diff.has_any(d), 'expected empty diff')
+-- from: empty / equal
+function test.should_emit_empty_node_when_equal()
+	local node = diff.from({ a = 1, b = 2 }, { a = 1, b = 2 })
+	assert(is_empty(node), 'expected empty node')
 end
 
-function test.should_treat_empty_as_hash()
-	local d = diff.compute({}, {})
-	assert(not diff.has_any(d))
+function test.should_emit_empty_node_for_two_empties()
+	local node = diff.from({}, {})
+	assert(is_empty(node))
 end
 
--- compute: hash basics
+-- from: hash
 function test.should_emit_change_on_scalar_differ()
-	local d = diff.compute({ a = 1 }, { a = 2 })
-	assert(#d.changes == 1)
-	assert(d.changes[1].path[1] == 'a')
-	assert(d.changes[1].value == 2)
+	local node = diff.from({ a = 1 }, { a = 2 })
+	assert(count(node.changes) == 1)
+	assert(node.changes.a == 2)
 end
 
 function test.should_emit_change_on_new_key()
-	local d = diff.compute({}, { coins = 10 })
-	assert(#d.changes == 1)
-	assert(d.changes[1].path[1] == 'coins')
-	assert(d.changes[1].value == 10)
+	local node = diff.from({}, { coins = 10 })
+	assert(count(node.changes) == 1)
+	assert(node.changes.coins == 10)
 end
 
 function test.should_emit_remove_on_missing_key()
-	local d = diff.compute({ a = 1, b = 2 }, { a = 1 })
-	assert(#d.removes == 1)
-	assert(d.removes[1].path[1] == 'b')
+	local node = diff.from({ a = 1, b = 2 }, { a = 1 })
+	assert(#node.removes == 1)
+	assert(node.removes[1] == 'b')
 end
 
--- compute: nested
-function test.should_recurse_into_nested_tables()
-	local d = diff.compute({ stats = { hp = 10, mp = 5 } }, { stats = { hp = 10, mp = 8 } })
-	assert(#d.changes == 1)
-	assert(d.changes[1].path[1] == 'stats' and d.changes[1].path[2] == 'mp')
-	assert(d.changes[1].value == 8)
+-- from: nested via children
+function test.should_recurse_via_children_on_nested_table()
+	local node = diff.from({ stats = { hp = 10, mp = 5 } }, { stats = { hp = 10, mp = 8 } })
+
+	local stats = node.children.stats
+	assert(stats, 'expected children.stats')
+	assert(count(stats.changes) == 1)
+	assert(stats.changes.mp == 8)
 end
 
-function test.should_emit_nested_remove()
-	local d = diff.compute({ inv = { sword = 1, shield = 1 } }, { inv = { sword = 1 } })
-	assert(#d.removes == 1)
-	assert(d.removes[1].path[1] == 'inv' and d.removes[1].path[2] == 'shield')
+function test.should_emit_nested_remove_via_children()
+	local node = diff.from({ inv = { sword = 1, shield = 1 } }, { inv = { sword = 1 } })
+
+	local inv = node.children.inv
+	assert(inv, 'expected children.inv')
+	assert(#inv.removes == 1)
+	assert(inv.removes[1] == 'shield')
 end
 
--- compute: arrays
+function test.should_skip_children_entry_when_subtree_equal()
+	local node = diff.from({ stats = { hp = 1 } }, { stats = { hp = 1 } })
+	assert(next(node.children) == nil, 'equal subtrees must not create child entries')
+end
+
+-- from: arrays
 function test.should_emit_change_for_same_length_array()
-	local d = diff.compute({ 1, 2, 3 }, { 1, 9, 3 })
-	assert(#d.changes == 1)
-	assert(d.changes[1].path[1] == 2 and d.changes[1].value == 9)
+	local node = diff.from({ 1, 2, 3 }, { 1, 9, 3 })
+	assert(count(node.changes) == 1)
+	assert(node.changes[2] == 9)
 end
 
-function test.should_recurse_into_array_elements()
-	local d = diff.compute({ { hp = 10 }, { hp = 20 } }, { { hp = 10 }, { hp = 30 } })
-	assert(#d.changes == 1)
-	assert(d.changes[1].path[1] == 2 and d.changes[1].path[2] == 'hp')
-	assert(d.changes[1].value == 30)
+function test.should_recurse_into_array_element_via_children()
+	local node = diff.from({ { hp = 10 }, { hp = 20 } }, { { hp = 10 }, { hp = 30 } })
+
+	local element = node.children[2]
+	assert(element, 'expected children[2]')
+	assert(count(element.changes) == 1)
+	assert(element.changes.hp == 30)
 end
 
 function test.should_emit_shift_insertion_middle()
-	local d = diff.compute({ 'a', 'b', 'c' }, { 'a', 'x', 'b', 'c' })
-	assert(#d.shift_insertions == 1)
-	assert(d.shift_insertions[1].index == 2 and d.shift_insertions[1].value == 'x')
+	local node = diff.from({ 'a', 'b', 'c' }, { 'a', 'x', 'b', 'c' })
+	assert(#node.shift_inserts == 1)
+	assert(node.shift_inserts[1].index == 2 and node.shift_inserts[1].value == 'x')
 end
 
-function test.should_emit_shift_insertion_end()
-	local d = diff.compute({ 1, 2 }, { 1, 2, 3, 4 })
-	assert(#d.shift_insertions == 2)
-	assert(d.shift_insertions[1].index == 3 and d.shift_insertions[1].value == 3)
-	assert(d.shift_insertions[2].index == 4 and d.shift_insertions[2].value == 4)
+function test.should_emit_shift_insertion_end_in_ascending_order()
+	local node = diff.from({ 1, 2 }, { 1, 2, 3, 4 })
+	assert(#node.shift_inserts == 2)
+	assert(node.shift_inserts[1].index == 3 and node.shift_inserts[1].value == 3)
+	assert(node.shift_inserts[2].index == 4 and node.shift_inserts[2].value == 4)
 end
 
-function test.should_emit_shift_removal_middle()
-	local d = diff.compute({ 'a', 'b', 'c', 'd' }, { 'a', 'd' })
-	assert(#d.shift_removes == 2)
-	assert(d.shift_removes[1].index == 3)
-	assert(d.shift_removes[2].index == 2)
+function test.should_emit_shift_removal_middle_in_descending_order()
+	local node = diff.from({ 'a', 'b', 'c', 'd' }, { 'a', 'd' })
+	assert(#node.shift_removes == 2)
+	assert(node.shift_removes[1] == 3)
+	assert(node.shift_removes[2] == 2)
 end
 
 function test.should_emit_shift_removal_tail()
-	local d = diff.compute({ 1, 2, 3 }, { 1 })
-	assert(#d.shift_removes == 2)
-	assert(d.shift_removes[1].index == 3)
-	assert(d.shift_removes[2].index == 2)
+	local node = diff.from({ 1, 2, 3 }, { 1 })
+	assert(#node.shift_removes == 2)
+	assert(node.shift_removes[1] == 3)
+	assert(node.shift_removes[2] == 2)
 end
 
--- apply: changes
+-- apply: changes / removes
 function test.should_apply_change_to_root_key()
-	local t = { coins = 10 }
-	diff.apply(t, make { changes = { { path = { 'coins' }, value = 42 } } })
-	assert(t.coins == 42)
+	local state = { coins = 10 }
+	diff.apply(state, {
+		children = {},
+		changes = { coins = 42 },
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+	assert(state.coins == 42)
 end
 
-function test.should_apply_change_to_nested_key()
-	local t = { stats = { hp = 10, mp = 5 } }
-	diff.apply(t, make { changes = { { path = { 'stats', 'mp' }, value = 99 } } })
-	assert(t.stats.hp == 10 and t.stats.mp == 99)
-end
-
-function test.should_apply_change_creating_missing_parents()
-	local t: any = {}
-	diff.apply(t, make { changes = { { path = { 'stats', 'hp' }, value = 100 } } })
-	assert(t.stats.hp == 100)
+function test.should_apply_remove_at_root()
+	local state = { a = 1, b = 2 }
+	diff.apply(state, {
+		children = {},
+		changes = {},
+		removes = { 'b' },
+		shift_inserts = {},
+		shift_removes = {},
+	})
+	assert(state.a == 1 and state.b == nil)
 end
 
 function test.should_apply_change_with_table_value_replacing_scalar()
-	local t = { x = 1 }
-	diff.apply(t, make { changes = { { path = { 'x' }, value = { nested = true } } } })
-	assert(type(t.x) == 'table' and t.x.nested == true)
+	local state = { x = 1 }
+	diff.apply(state, {
+		children = {},
+		changes = { x = { nested = true } },
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+	assert(type(state.x) == 'table' and state.x.nested == true)
 end
 
--- apply: removes
-function test.should_apply_remove()
-	local t = { a = 1, b = 2 }
-	diff.apply(t, make { removes = { { path = { 'b' } } } })
-	assert(t.a == 1 and t.b == nil)
+-- apply: nested via children
+function test.should_apply_nested_via_children()
+	local state = { stats = { hp = 10, mp = 5 } }
+	diff.apply(state, {
+		children = {
+			stats = {
+				children = {},
+				changes = { mp = 99 },
+				removes = {},
+				shift_inserts = {},
+				shift_removes = {},
+			},
+		},
+		changes = {},
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+	assert(state.stats.hp == 10 and state.stats.mp == 99)
 end
 
-function test.should_apply_nested_remove()
-	local t = { inv = { sword = 1, shield = 1 } }
-	diff.apply(t, make { removes = { { path = { 'inv', 'shield' } } } })
-	assert(t.inv.sword == 1 and t.inv.shield == nil)
+function test.should_apply_nested_creating_missing_parent()
+	local state: any = {}
+	diff.apply(state, {
+		children = {
+			stats = {
+				children = {},
+				changes = { hp = 100 },
+				removes = {},
+				shift_inserts = {},
+				shift_removes = {},
+			},
+		},
+		changes = {},
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+	assert(state.stats.hp == 100)
 end
 
 -- apply: shifts
-function test.should_apply_shift_insertion_middle()
-	local t = { 'a', 'b', 'c' }
-	diff.apply(t, make { shift_insertions = { { path = {}, index = 2, value = 'x' } } })
-	assert_equal(t, { 'a', 'x', 'b', 'c' })
-end
-
-function test.should_apply_shift_insertion_nested_path()
-	local t = { items = { 'a', 'c' } }
-	diff.apply(t, make { shift_insertions = { { path = { 'items' }, index = 2, value = 'b' } } })
-	assert_equal(t.items, { 'a', 'b', 'c' })
+function test.should_apply_shift_insertion_at_root()
+	local state = { 'a', 'b', 'c' }
+	diff.apply(state, {
+		children = {},
+		changes = {},
+		removes = {},
+		shift_inserts = { { index = 2, value = 'x' } },
+		shift_removes = {},
+	})
+	assert_equal(state, { 'a', 'x', 'b', 'c' })
 end
 
 function test.should_apply_multiple_shift_insertions_in_order()
-	local t = { 'a', 'b' }
-	diff.apply(
-		t,
-		make {
-			shift_insertions = {
-				{ path = {}, index = 3, value = 'c' },
-				{ path = {}, index = 4, value = 'd' },
+	local state = { 'a', 'b' }
+	diff.apply(state, {
+		children = {},
+		changes = {},
+		removes = {},
+		shift_inserts = { { index = 3, value = 'c' }, { index = 4, value = 'd' } },
+		shift_removes = {},
+	})
+	assert_equal(state, { 'a', 'b', 'c', 'd' })
+end
+
+function test.should_apply_shift_removal_at_root()
+	local state = { 'a', 'b', 'c', 'd' }
+	diff.apply(state, {
+		children = {},
+		changes = {},
+		removes = {},
+		shift_inserts = {},
+		shift_removes = { 3, 2 },
+	})
+	assert_equal(state, { 'a', 'd' })
+end
+
+function test.should_apply_shift_via_children_path()
+	local state = { items = { 'a', 'c' } }
+	diff.apply(state, {
+		children = {
+			items = {
+				children = {},
+				changes = {},
+				removes = {},
+				shift_inserts = { { index = 2, value = 'b' } },
+				shift_removes = {},
 			},
-		}
-	)
-	assert_equal(t, { 'a', 'b', 'c', 'd' })
+		},
+		changes = {},
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+	assert_equal(state.items, { 'a', 'b', 'c' })
 end
 
-function test.should_apply_shift_removal()
-	local t = { 'a', 'b', 'c', 'd' }
-	diff.apply(
-		t,
-		make {
-			shift_removes = {
-				{ path = {}, index = 3 },
-				{ path = {}, index = 2 },
+-- apply: combined / no-op
+function test.should_apply_combined_diff()
+	local state = { coins = 10, inv = { 'sword', 'shield' }, scratch = 1 }
+	diff.apply(state, {
+		children = {
+			inv = {
+				children = {},
+				changes = {},
+				removes = {},
+				shift_inserts = { { index = 2, value = 'bow' } },
+				shift_removes = { 3 },
 			},
-		}
-	)
-	assert_equal(t, { 'a', 'd' })
+		},
+		changes = { coins = 50 },
+		removes = { 'scratch' },
+		shift_inserts = {},
+		shift_removes = {},
+	})
+
+	assert(state.coins == 50)
+	assert(state.scratch == nil)
+	assert_equal(state.inv, { 'sword', 'bow' })
 end
 
-function test.should_apply_shift_removal_nested_path()
-	local t = { items = { 'a', 'b', 'c' } }
-	diff.apply(t, make { shift_removes = { { path = { 'items' }, index = 2 } } })
-	assert_equal(t.items, { 'a', 'c' })
+function test.should_apply_no_op_on_empty_node()
+	local state = { a = 1, b = { c = 2 }, arr = { 1, 2, 3 } }
+	local before = diff.snapshot(state)
+
+	diff.apply(state, {
+		children = {},
+		changes = {},
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+
+	assert_equal(state, before)
 end
 
--- apply: combined / edge
-function test.should_apply_combined_diff_in_defined_order()
-	local t = { coins = 10, inv = { 'sword', 'shield' }, scratch = 1 }
-	diff.apply(
-		t,
-		make {
-			changes = { { path = { 'coins' }, value = 50 } },
-			removes = { { path = { 'scratch' } } },
-			shift_insertions = { { path = { 'inv' }, index = 2, value = 'bow' } },
-			shift_removes = { { path = { 'inv' }, index = 3 } },
-		}
-	)
-	assert(t.coins == 50)
-	assert(t.scratch == nil)
-	assert_equal(t.inv, { 'sword', 'bow' })
-end
-
-function test.should_apply_no_op_on_empty_diff()
-	local t = { a = 1, b = { c = 2 }, arr = { 1, 2, 3 } }
-	local snapshot = diff.clone(t)
-	diff.apply(t, empty)
-	assert_equal(t, snapshot)
-end
-
--- apply: frozen descendants (root must stay mutable)
-function test.should_apply_change_to_frozen_subtable()
+-- apply: frozen subtables (copy-on-write)
+function test.should_apply_change_on_frozen_subtable()
 	local original = table.freeze { hp = 10, mp = 5 }
-	local t = { stats = original }
-	diff.apply(t, make { changes = { { path = { 'stats', 'hp' }, value = 99 } } })
-	assert(t.stats.hp == 99 and t.stats.mp == 5)
-	assert(original.hp == 10, 'original frozen subtable unchanged')
-	assert(t.stats ~= original, 'subtable replaced with mutable clone')
-end
+	local state = { stats = original }
 
-function test.should_apply_remove_on_frozen_subtable()
-	local original = table.freeze { sword = 1, shield = 1 }
-	local t = { inv = original }
-	diff.apply(t, make { removes = { { path = { 'inv', 'shield' } } } })
-	assert(t.inv.sword == 1 and t.inv.shield == nil)
-	assert(original.shield == 1, 'original frozen subtable unchanged')
+	diff.apply(state, {
+		children = {
+			stats = {
+				children = {},
+				changes = { hp = 99 },
+				removes = {},
+				shift_inserts = {},
+				shift_removes = {},
+			},
+		},
+		changes = {},
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+
+	assert(state.stats.hp == 99 and state.stats.mp == 5)
+	assert(original.hp == 10, 'frozen original must be untouched')
+	assert(state.stats ~= original, 'frozen subtable must be replaced with mutable clone')
 end
 
 function test.should_apply_shift_on_frozen_nested_array()
 	local original = table.freeze { 'a', 'c' }
-	local t = { items = original }
-	diff.apply(t, make { shift_insertions = { { path = { 'items' }, index = 2, value = 'b' } } })
-	assert_equal(t.items, { 'a', 'b', 'c' })
+	local state = { items = original }
+
+	diff.apply(state, {
+		children = {
+			items = {
+				children = {},
+				changes = {},
+				removes = {},
+				shift_inserts = { { index = 2, value = 'b' } },
+				shift_removes = {},
+			},
+		},
+		changes = {},
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+
+	assert_equal(state.items, { 'a', 'b', 'c' })
 	assert_equal(original, { 'a', 'c' })
 end
 
-function test.should_apply_combined_diff_on_frozen_subtables()
-	local frozen_inv = table.freeze { 'sword', 'shield' }
-	local t = { coins = 10, inv = frozen_inv, scratch = 1 }
-	diff.apply(
-		t,
-		make {
-			changes = { { path = { 'coins' }, value = 50 } },
-			removes = { { path = { 'scratch' } } },
-			shift_insertions = { { path = { 'inv' }, index = 2, value = 'bow' } },
-			shift_removes = { { path = { 'inv' }, index = 3 } },
-		}
-	)
-	assert(t.coins == 50 and t.scratch == nil)
-	assert_equal(t.inv, { 'sword', 'bow' })
-	assert_equal(frozen_inv, { 'sword', 'shield' })
-end
-
 function test.should_error_on_frozen_root()
-	local t = table.freeze { coins = 10 }
-	local ok = pcall(diff.apply, t, make { changes = { { path = { 'coins' }, value = 42 } } })
+	local state = table.freeze { coins = 10 }
+
+	local ok = pcall(diff.apply, state, {
+		children = {},
+		changes = { coins = 42 },
+		removes = {},
+		shift_inserts = {},
+		shift_removes = {},
+	})
+
 	assert(not ok, 'apply must error on frozen root')
 end
 
--- roundtrip (compute + apply integration)
+-- roundtrip integration
 function test.should_roundtrip_scalar_change()
 	roundtrip({ a = 1, b = 2 }, { a = 1, b = 99 })
 end
 
-function test.should_roundtrip_add_and_remove()
+function test.should_roundtrip_add_and_remove_keys()
 	roundtrip({ a = 1, b = 2 }, { a = 1, c = 3 })
 end
 
-function test.should_roundtrip_nested()
+function test.should_roundtrip_nested_hash()
 	roundtrip({ stats = { hp = 10, mp = 5 }, coins = 3 }, { stats = { hp = 15 }, coins = 3 })
 end
 
-function test.should_roundtrip_array_insert()
+function test.should_roundtrip_array_insert_middle()
 	roundtrip({ 'a', 'b', 'c' }, { 'a', 'x', 'b', 'c' })
 end
 
-function test.should_roundtrip_array_remove()
+function test.should_roundtrip_array_insert_end()
+	roundtrip({ 1, 2 }, { 1, 2, 3, 4 })
+end
+
+function test.should_roundtrip_array_remove_middle()
 	roundtrip({ 1, 2, 3, 4, 5 }, { 1, 5 })
 end
 
-function test.should_roundtrip_array_replace()
+function test.should_roundtrip_array_remove_tail()
+	roundtrip({ 1, 2, 3 }, { 1 })
+end
+
+function test.should_roundtrip_array_replace_same_length()
 	roundtrip({ 1, 2, 3 }, { 1, 9, 3 })
 end
 
