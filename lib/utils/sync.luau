@@ -4,7 +4,6 @@ local diff_codec = require './diff_codec'
 -- defs
 type packet = { buf: buffer, unknowns: { any } }
 export type syncer<Receiver> = {
-	idx: diff_codec.schema_index,
 	send: (target: Receiver, packet) -> (),
 	targets: { [Receiver]: any },
 	snapshots: { [Receiver]: any },
@@ -14,10 +13,9 @@ export type syncer<Receiver> = {
 -- functions
 local function create<Receiver>(params: {
 	default: any,
-	idx: diff_codec.schema_index,
 	send: (target: Receiver, packet) -> (),
 }): syncer<Receiver>
-	return { default = params.default, idx = params.idx, send = params.send, targets = {}, snapshots = {} }
+	return { default = params.default, send = params.send, targets = {}, snapshots = {} }
 end
 local function remove<Receiver>(syncer: syncer<Receiver>, target: Receiver)
 	syncer.targets[target] = nil
@@ -43,7 +41,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 
 		local diff = diff_algo.compute(prev, curr)
 		if diff_algo.has_any(diff) then
-			local buf, unknowns = diff_codec.encode(diff, syncer.idx)
+			local buf, unknowns = diff_codec.encode(diff)
 			packet = { buf = buf, unknowns = unknowns } :: any
 		else
 			packet = false :: any
@@ -74,8 +72,8 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 	end
 end
 
-local function apply<T>(idx: diff_codec.schema_index, state: T, buf: buffer, unknowns: { any }?)
-	diff_algo.apply(state, diff_codec.decode(buf, unknowns, idx))
+local function apply<T>(state: T, buf: buffer, unknowns: { any }?)
+	diff_algo.apply(state, diff_codec.decode(buf, unknowns))
 end
 
 return table.freeze { create = create, remove = remove, step = step, apply = apply }

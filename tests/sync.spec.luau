@@ -10,7 +10,6 @@ local function make_syncer(schema: any?): (sync.syncer<string>, { msg })
 	local sent: { msg } = {}
 	local s = sync.create {
 		default = schema,
-		idx = diff_codec.build_index(schema),
 		send = function(target: string, p: packet)
 			table.insert(sent, { target = target, buf = p.buf, unknowns = p.unknowns })
 		end,
@@ -18,8 +17,8 @@ local function make_syncer(schema: any?): (sync.syncer<string>, { msg })
 	return s, sent
 end
 
-local function apply_msg(state: any, idx: diff_codec.schema_index, m: msg)
-	sync.apply(idx, state, m.buf, m.unknowns)
+local function apply_msg(state: any, m: msg)
+	sync.apply(state, m.buf, m.unknowns)
 end
 
 -- basic flow: register, step, mutate
@@ -56,7 +55,7 @@ function test.should_roundtrip_full_state_through_apply()
 	sync.step(s)
 
 	local client: any = {}
-	apply_msg(client, s.idx, sent[1])
+	apply_msg(client, sent[1])
 	assert(client.coins == 50)
 	assert(client.stats.hp == 80)
 	assert(client.items[1] == 'a' and client.items[2] == 'b')
@@ -107,7 +106,7 @@ function test.should_catch_up_new_joiner_via_targeted_step()
 	assert(sent[2].target == 'p2')
 
 	local p2_state: any = {}
-	apply_msg(p2_state, s.idx, sent[2])
+	apply_msg(p2_state, sent[2])
 	assert(p2_state.coins == 10, 'p2 caught up to current state')
 end
 
@@ -137,8 +136,8 @@ function test.should_send_resync_when_target_switches_curr()
 
 	assert(#sent == 2)
 	local client: any = {}
-	apply_msg(client, s.idx, sent[1])
-	apply_msg(client, s.idx, sent[2])
+	apply_msg(client, sent[1])
+	apply_msg(client, sent[2])
 	assert(client.coins == 99)
 end
 
@@ -164,7 +163,7 @@ function test.should_send_only_changed_field_against_default_for_new_target()
 	sync.step(s)
 
 	assert(#sent == 1)
-	local d = diff_codec.decode(sent[1].buf, sent[1].unknowns, s.idx)
+	local d = diff_codec.decode(sent[1].buf, sent[1].unknowns)
 	assert(#d.removes == 0 and #d.shift_insertions == 0 and #d.shift_removes == 0)
 	assert(#d.changes == 1, `expected 1 change, got {#d.changes}`)
 
@@ -173,7 +172,7 @@ function test.should_send_only_changed_field_against_default_for_new_target()
 	assert(change.value == 100)
 
 	local client: any = { persistent = 0, mutable = 0 }
-	apply_msg(client, s.idx, sent[1])
+	apply_msg(client, sent[1])
 	assert(client.persistent == 0 and client.mutable == 100)
 end
 

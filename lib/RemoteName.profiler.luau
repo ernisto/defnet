@@ -21,12 +21,11 @@ return function(
 		}
 	end
 
-	local state_idx = state.idxs[rbxevent :: any]
-	if state_idx then
+	if state.remotes[rbxevent :: any] then
 		return {
 			{
 				Name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', ''),
-				Data = { diff_codec.decode(args[1], args[2], state_idx) },
+				Data = { diff_codec.decode(args[1], args[2]) },
 			},
 		}
 	end

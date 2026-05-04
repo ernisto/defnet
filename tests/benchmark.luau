@@ -54,15 +54,6 @@ end
 
 local large_table = make_large_table(1024)
 
-local schema = {
-	coins = 0,
-	level = 0,
-	items = {}, --{ [1] = { name = '', count = 0 } },
-	stats = { hp = 0, mp = 0 },
-}
-local idx = diff_codec.build_index(schema)
-local empty_idx = diff_codec.build_index(nil)
-
 local diff_small = {
 	changes = {
 		{ path = { 'coins' }, value = 200 },
@@ -86,16 +77,14 @@ local diff_large = make_diff_large(1024)
 -- sizes
 local small_buf = encode(small_table)
 local large_buf = encode(large_table)
-local diff_small_buf = diff_codec.encode(diff_small, idx)
-local diff_small_no_schema_buf = diff_codec.encode(diff_small, empty_idx)
-local diff_large_buf = diff_codec.encode(diff_large, idx)
+local diff_small_buf = diff_codec.encode(diff_small)
+local diff_large_buf = diff_codec.encode(diff_large)
 
 print 'payload sizes:'
 print(string.format('  small table          : %d bytes', buffer.len(small_buf)))
 print(string.format('  large table (n=1024)  : %d bytes', buffer.len(large_buf)))
-print(string.format('  diff small w/ schema : %d bytes', buffer.len(diff_small_buf)))
-print(string.format('  diff small no schema : %d bytes', buffer.len(diff_small_no_schema_buf)))
-print(string.format('  diff large w/ schema : %d bytes', buffer.len(diff_large_buf)))
+print(string.format('  diff small          : %d bytes', buffer.len(diff_small_buf)))
+print(string.format('  diff large          : %d bytes', buffer.len(diff_large_buf)))
 print()
 print(`iterations per bench: {ITERATIONS}`)
 
@@ -131,20 +120,17 @@ bench('push_varint 2097151 (3 byte)', function()
 end)
 
 section 'diff_codec'
-bench('encode diff (small, w/ schema)', function()
-	diff_codec.encode(diff_small, idx)
+bench('encode diff (small)', function()
+	diff_codec.encode(diff_small)
 end)
-bench('encode diff (small, no schema)', function()
-	diff_codec.encode(diff_small, empty_idx)
-end)
-bench('decode diff (small, w/ schema)', function()
-	diff_codec.decode(diff_small_buf, nil, idx)
+bench('decode diff (small)', function()
+	diff_codec.decode(diff_small_buf)
 end)
 bench('encode diff (large, n=1024)', function()
-	diff_codec.encode(diff_large, idx)
+	diff_codec.encode(diff_large)
 end)
 bench('decode diff (large, n=1024)', function()
-	diff_codec.decode(diff_large_buf, nil, idx)
+	diff_codec.decode(diff_large_buf)
 end)
 
 -- diff fixtures

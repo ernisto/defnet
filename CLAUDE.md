@@ -29,8 +29,8 @@ stylua --check lib/ tests/
 
 - `lib/utils/codec.luau` — binary buffer serializer. `encode(value) -> (buffer, unknowns)` / `decode(buffer, unknowns?) -> value`. Handles nil, bool, number (f64), string (ASCII only), vector (3×f32), table (seq+hash), buffer. Repeated table refs dedup via `identity_pool` workspace map (tag 9 = tab-ref + varint id), so shared subtrees and recursive tables roundtrip with identity preserved. Non-serializable values (instances, coroutines, etc.) go into the `unknowns` side-channel array by reference — they don't cross the wire. Exports `push_value` / `pop_value` / `push_varint` / `pop_varint` for other encoders built on the shared buffer/cursor. `--!native`. Errors on NaN, non-ASCII strings.
 - `lib/utils/diff.luau` — pure diff algorithm over nested tables. `compute(prev, curr) -> diff`, `apply(state, diff)`, `clone`, `has_any`. Diff is `{ changes, removes, shift_insertions, shift_removes }` so array shifts encode as a single op instead of N changes.
-- `lib/utils/diff_codec.luau` — encode/decode a `diff` into the codec's shared buffer. `build_index(default) -> schema_index` precomputes ids for every path in the schema so paths encode as `(varint schema_node_id, varint unknown_len, unknown keys...)` instead of full path traversal. `encode(diff, idx)` / `decode(buf, unknowns, idx)` require the prebuilt index — no fallback rebuild.
-- `lib/utils/sync.luau` — per-receiver diff/send loop. `create { idx, send }` returns a `syncer<Receiver>` with `targets` and `snapshots`. `step(syncer, target?)` diffs each target's current value against its snapshot, encodes once per `curr` (memoized by reference), sends, and updates the snapshot. `remove(syncer, target)` drops both. `apply(idx, state, buf, unknowns)` decodes and applies on the receiver.
+- `lib/utils/diff_codec.luau` — encode/decode a `diff` into the codec's shared buffer. `encode(diff) -> (buffer, unknowns?)` / `decode(buf, unknowns?) -> diff`. Paths encode as `(varint len, len * push_value(key))`.
+- `lib/utils/sync.luau` — per-receiver diff/send loop. `create { default, send }` returns a `syncer<Receiver>` with `targets` and `snapshots`. `step(syncer, target?)` diffs each target's current value against its snapshot, encodes once per `curr` (memoized by reference), sends, and updates the snapshot. `remove(syncer, target)` drops both. `apply(state, buf, unknowns)` decodes and applies on the receiver.
 
 ### `tests/`
 
@@ -46,7 +46,6 @@ stylua --check lib/ tests/
 - `codec.encode` errors on NaN, non-ASCII strings. Shared/recursive tables roundtrip with identity via tag-9 ref + `identity_pool`.
 - Unknowns (instances, coroutines, etc.) flow through the `unknowns` side-channel — never serialized.
 - `remotes()` mutates the def table in-place and freezes it. Call once at module load.
-- `diff_codec.encode` / `decode` require a prebuilt `schema_index` from `build_index(default)` — no optional fallback.
 
 ## Code Style
 
