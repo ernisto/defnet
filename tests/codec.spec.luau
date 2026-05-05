@@ -156,7 +156,7 @@ function test.should_track_unknown_values_once()
 	assert(unknowns[1] == unknown)
 end
 
-function test.should_serialize_duplicated_table_values()
+function test.should_preserve_identity_of_duplicated_table_values()
 	local shared = { x = 1, y = 2 }
 	local input = { first = shared, second = shared }
 	local encoded, unknowns = encode(input)
@@ -164,7 +164,7 @@ function test.should_serialize_duplicated_table_values()
 
 	assert(decoded.first.x == 1 and decoded.first.y == 2)
 	assert(decoded.second.x == 1 and decoded.second.y == 2)
-	assert(decoded.first ~= decoded.second)
+	assert(decoded.first == decoded.second)
 end
 
 -- varint primitives (internal building block)
@@ -232,14 +232,14 @@ function test.should_error_when_encoding_non_ascii_string()
 	assert(ok == false)
 end
 
-function test.should_error_when_encoding_recursive_table()
+function test.should_roundtrip_recursive_table()
 	local input = {}
 	input.self = input
 
-	local ok, _ = pcall(function()
-		encode(input)
-	end)
-	assert(ok == false)
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert(decoded.self == decoded)
 end
 
 return test

@@ -27,6 +27,8 @@ type table = { [any]: any }
 local limit = 1024 -- expandable
 local working_buf = buffer.create(limit)
 local unknowns: { any } = {}
+local identity_pool: any = {} -- { [any]: number } & { [number]: any }
+local next_identity = 1
 local cursor = 0
 local fail = false
 
@@ -41,6 +43,8 @@ local function reset_workspace()
 	cursor = 0
 	fail = false
 	unknowns = {}
+	identity_pool = {}
+	next_identity = 1
 end
 local function free_workspace(): (buffer, { any }?)
 	local copy = buffer.create(cursor)
@@ -55,6 +59,8 @@ local function load_workspace(input: buffer, input_unknowns: { any }?)
 	buffer.copy(working_buf, 0, input)
 
 	unknowns = input_unknowns or not_available_unknowns()
+	identity_pool = {}
+	next_identity = 1
 	cursor = 0
 end
 
@@ -82,6 +88,22 @@ local function peek_u32(): number
 	-- so we are alway allocating +3 bytes for `working_buf`
 	-- instead of waste time handling edge cases
 	return buffer.readu32(working_buf, cursor)
+end
+
+local function get_identity(value: any): number?
+	return identity_pool[value]
+end
+local function register_push_identity(value: any): number
+	local id = next_identity
+	identity_pool[value] = id
+	next_identity += 1
+	return id
+end
+local function register_pop_identity(value: any): number
+	local id = next_identity
+	identity_pool[id] = value
+	next_identity += 1
+	return id
 end
 
 -- primitives
@@ -199,6 +221,8 @@ local function pop_num(): number
 end
 
 local function push_str(str: string)
+	register_push_identity(str)
+
 	local len = string.len(str)
 	push_size(len)
 
@@ -208,7 +232,10 @@ local function push_str(str: string)
 end
 local function pop_str(): string
 	local len = pop_size()
-	return buffer.readstring(working_buf, advance(len), len)
+	local str = buffer.readstring(working_buf, advance(len), len)
+
+	register_pop_identity(str)
+	return str
 end
 
 local function push_vec(vec: vector)
@@ -242,9 +269,16 @@ local function pop_buf(): buffer
 	return output_buf
 end
 
+local function push_identity(tab: table)
+	push_size(identity_pool[tab])
+end
+local function pop_identity(): table
+	return identity_pool[pop_size()]
+end
+
 local function push_value(value: any)
 	local type = type(value)
-	local tag = type_to_tags[type] or 1
+	local tag = if identity_pool[value] then 9 else type_to_tags[type] or 1
 
 	push_u8(tag)
 	return if tag == 1
@@ -255,7 +289,8 @@ local function push_value(value: any)
 		elseif tag == 5 then push_str(value)
 		elseif tag == 6 then push_vec(value)
 		elseif tag == 7 then push_tab(value)
-		else push_buf(value)
+		elseif tag == 8 then push_buf(value)
+		else push_identity(value)
 end
 local function pop_value(): any
 	local tag = pop_u8()
@@ -267,10 +302,13 @@ local function pop_value(): any
 		elseif tag == 5 then pop_str()
 		elseif tag == 6 then pop_vec()
 		elseif tag == 7 then pop_tab()
-		else pop_buf()
+		elseif tag == 8 then pop_buf()
+		else pop_identity()
 end
 
 function push_tab(tab: table): ()
+	register_push_identity(tab)
+
 	local hash_len = 0
 	local seq_len = 0
 
@@ -297,6 +335,8 @@ function pop_tab(): table
 	local hash_len = pop_size()
 
 	local out = table.create(arr_len)
+	register_pop_identity(out)
+
 	for i = 1, arr_len do
 		out[i] = pop_value()
 	end
@@ -333,10 +373,17 @@ return table.freeze {
 	push_u32 = push_u32,
 	push_value = push_value,
 	push_varint = push_varint,
+	push_identity = push_identity,
 
 	pop_u8 = pop_u8,
 	pop_u16 = pop_u16,
 	pop_u32 = pop_u32,
 	pop_value = pop_value,
 	pop_varint = pop_varint,
+	pop_identity = pop_identity,
+
+	-- identity pool
+	get_identity = get_identity,
+	register_push_identity = register_push_identity,
+	register_pop_identity = register_pop_identity,
 }
