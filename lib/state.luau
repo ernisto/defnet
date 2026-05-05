@@ -3,10 +3,11 @@ local RunService = game:GetService 'RunService'
 
 local codec = require './utils/codec'
 local diff = require './utils/diff'
+local diff_codec = require './utils/diff_codec'
+local event = require './event'
 local sync = require './utils/sync'
 
 local is_client = RunService:IsClient()
-local remotes: { [RemoteEvent]: true } = {}
 
 -- defs
 type remote_desc<T> = { class: string, default: T? }
@@ -26,7 +27,7 @@ local function define<T>(default: T?): state_type<T>
 end
 
 local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
-	remotes[remote] = true
+	event.codecs[remote] = diff_codec.impl :: any
 
 	if is_client then
 		local function listen_changed(listener)
@@ -48,7 +49,7 @@ local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 		end
 	end
 
-	local syncer = sync.create { default = diff.snapshot(desc.default), send = send }
+	local syncer = sync.create { send = send, default = diff.snapshot(desc.default) }
 	local function step(player: Player?)
 		sync.step(syncer, player)
 	end
@@ -57,7 +58,7 @@ local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 	end
 
 	table.insert(registry, syncer)
-	return table.freeze { listen_changed = listen_changed, step = step, server = syncer.targets } :: any
+	return table.freeze { changed = listen_changed, step = step, server = syncer.targets } :: any
 end
 
 local function step_sync(player: Player?)
@@ -78,4 +79,4 @@ if not is_client then
 end
 
 -- module
-return table.freeze { remotes = remotes, define = define, wrap = wrap, step_sync = step_sync }
+return table.freeze { define = define, wrap = wrap, step_sync = step_sync }

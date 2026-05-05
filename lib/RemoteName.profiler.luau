@@ -1,9 +1,6 @@
-local diff_codec = require './utils/diff_codec'
-
 local event = require './event'
-local state = require './state'
-
 type request_info = { { Name: string, Data: { any } } }
+
 return function(
 	rbxevent: UnreliableRemoteEvent | RemoteEvent | RemoteFunction,
 	player: Player,
@@ -11,23 +8,13 @@ return function(
 ): request_info?
 	if not args then args = player :: any end
 
-	local event_codec = event.codecs[rbxevent :: any]
-	if event_codec then
-		return {
-			{
-				Name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', ''),
-				Data = { event_codec.decode(args[1], args[2]) },
-			},
-		}
-	end
+	local codec = event.codecs[rbxevent :: any]
+	if not codec then return end
 
-	if state.remotes[rbxevent :: any] then
-		return {
-			{
-				Name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', ''),
-				Data = { diff_codec.impl.decode(args[1], args[2]) },
-			},
-		}
-	end
-	return
+	return {
+		{
+			Name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', ''),
+			Data = { codec.decode(args[1], args[2]) },
+		},
+	}
 end
