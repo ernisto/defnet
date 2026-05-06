@@ -18,9 +18,6 @@ export type event_type<T...> = {
 }
 
 -- functions
-local function define<T...>(codec: codec.codec_impl<any>?): event_type<T...>
-	return { class = 'RemoteEvent', codec = codec } :: any
-end
 local function wrap_codec<T>(remote: RemoteEvent, codec_impl: codec.codec_impl<T>): event_type<(T)>
 	codecs[remote] = codec_impl
 
@@ -99,6 +96,9 @@ local function wrap<T...>(remote: RemoteEvent, desc: remote_desc<any>): event_ty
 			end :: any)
 		end,
 	}
+end
+local function define<T...>(codec: codec.codec_impl<any>?): event_type<T...>
+	return { rbxclass = 'RemoteEvent', wrap = wrap, codec = codec } :: any
 end
 
 -- module

@@ -17,9 +17,6 @@ export type func_type<T..., R...> = {
 }
 
 -- functions
-local function define<T..., R...>(): func_type<T..., R...>
-	return { class = 'RemoteFunction' } :: any
-end
 local function wrap<T>(remote: RemoteFunction, desc: remote_desc<T>)
 	return setmetatable({
 		invoke_server = function(...)
@@ -54,6 +51,9 @@ local function wrap<T>(remote: RemoteFunction, desc: remote_desc<T>)
 			end
 		end,
 	})
+end
+local function define<T..., R...>(): func_type<T..., R...>
+	return { rbxclass = 'RemoteFunction', wrap = wrap } :: any
 end
 
 -- module

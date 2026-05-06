@@ -28,10 +28,6 @@ local server_pools: { [Player]: codec.pool } = {}
 local client_pool: codec.pool = if is_client then codec.create_pool() else nil :: any
 
 -- definition
-local function define<T>(default: T?): state_type<T>
-	return { class = 'state', codec = codec, default = default } :: any
-end
-
 local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 	event.codecs[remote] = diff_codec.impl :: any
 
@@ -70,7 +66,11 @@ local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 	table.insert(registry, syncer)
 	return table.freeze { changed = listen_changed, step = step, server = syncer.targets } :: any
 end
+local function define<T>(default: T?): state_type<T>
+	return { rbxclass = 'state', wrap = wrap, codec = codec, default = default } :: any
+end
 
+-- functions
 local function step_sync(player: Player?)
 	for _, s in registry do
 		sync.step(s, player)
