@@ -150,14 +150,17 @@ local function pop_diff(): diff_node
 end
 
 -- module
-local function encode(diff: diff_node): (buffer, { any }?)
+local function encode(diff: diff_node, pool: codec.pool?): (buffer, { any }?)
 	codec.reset_workspace()
+	codec.load_pool(pool)
 	push_diff(diff)
-	return codec.free_workspace()
+	return codec.save_workspace()
 end
-local function decode(input: buffer, input_unknowns: { any }?): diff_node
-	codec.load_workspace(input, input_unknowns)
-	return pop_diff()
+local function decode(input: buffer, pool: codec.pool?, input_unknowns: { any }?): diff_node
+	codec.load_workspace(input, input_unknowns, pool)
+	local diff = pop_diff()
+	codec.save_pool()
+	return diff
 end
 
 -- module

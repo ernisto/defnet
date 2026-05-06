@@ -18,7 +18,7 @@ local function make_syncer(schema: any?): (sync.syncer<string>, { msg })
 end
 
 local function apply_msg(state: any, m: msg)
-	sync.apply(state, m.buf, m.unknowns)
+	sync.apply(state, m.buf, nil, m.unknowns)
 end
 
 -- basic flow: register, step, mutate
@@ -163,7 +163,7 @@ function test.should_send_only_changed_field_against_default_for_new_target()
 	sync.step(s)
 
 	assert(#sent == 1)
-	local d = diff_codec.impl.decode(sent[1].buf, sent[1].unknowns)
+	local d = diff_codec.impl.decode(sent[1].buf, nil, sent[1].unknowns)
 	assert(#d.removes == 0 and #d.shift_inserts == 0 and #d.shift_removes == 0)
 	assert(next(d.children) == nil, 'expected no nested children')
 

@@ -5,12 +5,16 @@ local test = {}
 -- helpers
 local function encode(v)
 	codec.reset_workspace()
+	codec.load_pool()
 	codec.push_value(v)
-	return codec.free_workspace()
+	return codec.save_workspace()
 end
 local function decode(buff, unk)
 	codec.load_workspace(buff, unk)
-	return codec.pop_value()
+	local out = codec.pop_value()
+
+	codec.save_pool()
+	return out
 end
 
 local function assert_buffer_equal(a: buffer, b: buffer)
@@ -183,7 +187,7 @@ function test.should_roundtrip_varint_boundaries()
 	for _, n in cases do
 		codec.reset_workspace()
 		codec.push_varint(n)
-		local encoded = codec.free_workspace()
+		local encoded = codec.save_workspace()
 
 		codec.load_workspace(encoded)
 		local decoded = codec.pop_varint()
@@ -204,7 +208,7 @@ function test.should_use_expected_byte_count_for_varints()
 	for _, case in cases do
 		codec.reset_workspace()
 		codec.push_varint(case.value)
-		local encoded = codec.free_workspace()
+		local encoded = codec.save_workspace()
 
 		assert(
 			buffer.len(encoded) == case.bytes,

@@ -2,6 +2,7 @@ local suites = {
 	require './codec.spec' :: any,
 	require './diff.spec',
 	require './diff_codec.spec',
+	require './pool.spec',
 	require './scan_nan.spec',
 	require './sync.spec',
 }

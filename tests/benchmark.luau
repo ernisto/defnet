@@ -1,6 +1,15 @@
 local codec = require '../lib/utils/codec'
-local diff_algo = require '../lib/utils/diff'
+local encode = codec.impl.encode
+local decode = codec.impl.decode
+
 local diff_codec = require '../lib/utils/diff_codec'
+local encode_diff = diff_codec.impl.encode
+local decode_diff = diff_codec.impl.decode
+
+local diff_algo = require '../lib/utils/diff'
+local diff_from = diff_algo.from
+local apply_diff = diff_algo.apply
+local snapshot = diff_algo.snapshot
 
 local ITERATIONS = 1000
 
@@ -19,17 +28,6 @@ end
 local function section(title: string)
 	print()
 	print(`== {title} ==`)
-end
-
--- helpers
-local function encode(v)
-	codec.reset_workspace()
-	codec.push_value(v)
-	return codec.free_workspace()
-end
-local function decode(buff, unk)
-	codec.load_workspace(buff, unk)
-	return codec.pop_value()
 end
 
 -- fixtures
@@ -119,31 +117,31 @@ section 'varint'
 bench('push_varint 127 (1 byte)', function()
 	codec.reset_workspace()
 	codec.push_varint(127)
-	codec.free_workspace()
+	codec.save_workspace()
 end)
 bench('push_varint 16383 (2 byte)', function()
 	codec.reset_workspace()
 	codec.push_varint(16383)
-	codec.free_workspace()
+	codec.save_workspace()
 end)
 bench('push_varint 2097151 (3 byte)', function()
 	codec.reset_workspace()
 	codec.push_varint(2097151)
-	codec.free_workspace()
+	codec.save_workspace()
 end)
 
 section 'diff_codec'
 bench('encode diff (small)', function()
-	diff_codec.impl.encode(diff_small)
+	encode_diff(diff_small)
 end)
 bench('decode diff (small)', function()
-	diff_codec.impl.decode(diff_small_buf)
+	decode_diff(diff_small_buf)
 end)
 bench('encode diff (large, n=1024)', function()
-	diff_codec.impl.encode(diff_large)
+	encode_diff(diff_large)
 end)
 bench('decode diff (large, n=1024)', function()
-	diff_codec.impl.decode(diff_large_buf)
+	decode_diff(diff_large_buf)
 end)
 
 -- diff fixtures
@@ -164,43 +162,43 @@ table.remove(large_curr_array_remove.items, 512)
 local nested_prev = { a = { b = { c = { d = { e = { f = 1 } } } } } }
 local nested_curr = { a = { b = { c = { d = { e = { f = 2 } } } } } }
 
-local diff_full_large = diff_algo.from({}, large_prev)
-local diff_scalar_large = diff_algo.from(large_prev, large_curr_scalar)
-local diff_insert_large = diff_algo.from(large_prev, large_curr_array_insert)
+local diff_full_large = diff_from({}, large_prev)
+local diff_scalar_large = diff_from(large_prev, large_curr_scalar)
+local diff_insert_large = diff_from(large_prev, large_curr_array_insert)
 
 section 'diff compute'
 bench('compute equal (small)', function()
-	diff_algo.from(small_table, small_table)
+	diff_from(small_table, small_table)
 end)
 bench('compute nested 6-deep change', function()
-	diff_algo.from(nested_prev, nested_curr)
+	diff_from(nested_prev, nested_curr)
 end)
 bench('compute equal (large, n=1024)', function()
-	diff_algo.from(large_prev, large_curr_unchanged)
+	diff_from(large_prev, large_curr_unchanged)
 end)
 bench('compute scalar change all rows (large, n=1024)', function()
-	diff_algo.from(large_prev, large_curr_scalar)
+	diff_from(large_prev, large_curr_scalar)
 end)
 bench('compute array insert middle (large, n=1024)', function()
-	diff_algo.from(large_prev, large_curr_array_insert)
+	diff_from(large_prev, large_curr_array_insert)
 end)
 bench('compute array remove middle (large, n=1024)', function()
-	diff_algo.from(large_prev, large_curr_array_remove)
+	diff_from(large_prev, large_curr_array_remove)
 end)
 bench('compute from empty (large, n=1024)', function()
-	diff_algo.from({}, large_prev)
+	diff_from({}, large_prev)
 end)
 
 section 'diff apply'
 bench('apply scalar change all rows (large, n=1024)', function()
-	local root = diff_algo.snapshot(large_prev)
-	diff_algo.apply(root, diff_scalar_large)
+	local root = snapshot(large_prev)
+	apply_diff(root, diff_scalar_large)
 end)
 bench('apply array insert middle (large, n=1024)', function()
-	local root = diff_algo.snapshot(large_prev)
-	diff_algo.apply(root, diff_insert_large)
+	local root = snapshot(large_prev)
+	apply_diff(root, diff_insert_large)
 end)
 bench('apply full populate (large, n=1024)', function()
 	local root = {}
-	diff_algo.apply(root, diff_full_large)
+	apply_diff(root, diff_full_large)
 end)

@@ -2,7 +2,7 @@
 
 local WORST_MISSING_BYTES_CASE = 3 -- check `peek_u32` hack comment
 
--- utils
+-- defs
 local type_to_tags = {
 	-- [anything else] = 1	-- unknown
 	['nil'] = 2,
@@ -14,11 +14,16 @@ local type_to_tags = {
 	['buffer'] = 8,
 }
 
-export type codec_impl<Data, Encoded... = (buffer, { any }?)> = {
-	encode: (Data) -> Encoded...,
-	decode: (Encoded...) -> Data,
-}
 type table = { [any]: any }
+export type pool = {
+	val_to_id: { [any]: number },
+	id_to_val: { [number]: any },
+	next_id: number,
+}
+export type codec_impl<Data> = {
+	encode: (Data, pool?) -> (buffer, { any }?),
+	decode: (buffer, pool?, { any }?) -> Data,
+}
 
 -- workspace
 -- based on global states for speed
@@ -27,10 +32,13 @@ type table = { [any]: any }
 local limit = 1024 -- expandable
 local working_buf = buffer.create(limit)
 local unknowns: { any } = {}
-local identity_pool: any = {} -- { [any]: number } & { [number]: any }
-local next_identity = 1
 local cursor = 0
 local fail = false
+
+local current_pool: pool?
+local next_identity = 1
+local val_to_id: { [any]: number } = {}
+local id_to_val: { [number]: any } = {}
 
 local function warn_not_available()
 	print(`unknown values not available, pls check the 2nd argument of 'decode' and 2nd return of 'encode'`)
@@ -39,29 +47,42 @@ local function not_available_unknowns(): { any }
 	return setmetatable({}, { __index = warn_not_available }) :: any
 end
 
-local function reset_workspace()
-	cursor = 0
-	fail = false
-	unknowns = {}
-	identity_pool = {}
-	next_identity = 1
+local function create_pool(): pool
+	return { val_to_id = {}, id_to_val = {}, next_id = 1 }
 end
-local function free_workspace(): (buffer, { any }?)
+local function load_pool(pool: pool?)
+	current_pool = pool
+	val_to_id = if pool then pool.val_to_id else {}
+	id_to_val = if pool then pool.id_to_val else {}
+	next_identity = if pool then pool.next_id else 1
+end
+local function save_pool()
+	if current_pool then current_pool.next_id = next_identity end
+end
+
+local function load_workspace(input: buffer, input_unknowns: { any }?, pool: pool?)
+	local input_len = buffer.len(input) + WORST_MISSING_BYTES_CASE
+	working_buf = if input_len < limit then working_buf else buffer.create(input_len)
+
+	buffer.copy(working_buf, 0, input)
+	load_pool(pool)
+
+	unknowns = input_unknowns or not_available_unknowns()
+	cursor = 0
+end
+local function save_workspace(): (buffer, { any }?)
+	if current_pool then current_pool.next_id = next_identity end
+
 	local copy = buffer.create(cursor)
 	buffer.copy(copy, 0, working_buf, 0, cursor)
 
 	if fail then error 'some values couldnt be serialized' end
 	return copy, if #unknowns > 0 then unknowns else nil
 end
-local function load_workspace(input: buffer, input_unknowns: { any }?)
-	local input_len = buffer.len(input) + WORST_MISSING_BYTES_CASE
-	working_buf = if input_len < limit then working_buf else buffer.create(input_len)
-	buffer.copy(working_buf, 0, input)
-
-	unknowns = input_unknowns or not_available_unknowns()
-	identity_pool = {}
-	next_identity = 1
+local function reset_workspace()
 	cursor = 0
+	fail = false
+	unknowns = {}
 end
 
 local function realloc()
@@ -91,17 +112,17 @@ local function peek_u32(): number
 end
 
 local function get_identity(value: any): number?
-	return identity_pool[value]
+	return val_to_id[value]
 end
 local function register_push_identity(value: any): number
 	local id = next_identity
-	identity_pool[value] = id
+	val_to_id[value] = id
 	next_identity += 1
 	return id
 end
 local function register_pop_identity(value: any): number
 	local id = next_identity
-	identity_pool[id] = value
+	id_to_val[id] = value
 	next_identity += 1
 	return id
 end
@@ -270,15 +291,15 @@ local function pop_buf(): buffer
 end
 
 local function push_identity(tab: table)
-	push_size(identity_pool[tab])
+	push_size(val_to_id[tab])
 end
 local function pop_identity(): table
-	return identity_pool[pop_size()]
+	return id_to_val[pop_size()]
 end
 
 local function push_value(value: any)
 	local type = type(value)
-	local tag = if identity_pool[value] then 9 else type_to_tags[type] or 1
+	local tag = if val_to_id[value] then 9 else type_to_tags[type] or 1
 
 	push_u8(tag)
 	return if tag == 1
@@ -347,25 +368,33 @@ function pop_tab(): table
 end
 
 -- module
-local function encode(value: any): (buffer, { any }?)
+local function encode(value: any, pool: pool?): (buffer, { any }?)
 	reset_workspace()
+	load_pool(pool)
+
 	push_value(value)
-	return free_workspace()
+	return save_workspace()
 end
-local function decode(input: buffer, input_unknowns: { any }?): any
-	load_workspace(input, input_unknowns)
-	return pop_value()
+local function decode(input: buffer, pool: pool?, input_unknowns: { any }?): any
+	load_workspace(input, input_unknowns, pool)
+	local value = pop_value()
+
+	save_pool()
+	return value
 end
 
 -- module
 return table.freeze {
 	-- user api
 	impl = { encode = encode, decode = decode },
+	create_pool = create_pool,
 
 	-- internal workspace
 	reset_workspace = reset_workspace,
-	free_workspace = free_workspace,
+	save_workspace = save_workspace,
 	load_workspace = load_workspace,
+	save_pool = save_pool,
+	load_pool = load_pool,
 
 	-- internal datatypes
 	push_u8 = push_u8,

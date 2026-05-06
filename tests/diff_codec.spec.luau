@@ -25,7 +25,7 @@ end
 
 local function roundtrip(node: any)
 	local buf, unknowns = diff_codec.encode(node)
-	return diff_codec.decode(buf, unknowns), unknowns
+	return diff_codec.decode(buf, nil, unknowns), unknowns
 end
 
 local function count(map: { [any]: any }): number
@@ -188,7 +188,7 @@ function test.should_track_unknowns_in_change_value()
 	local buf, unknowns = diff_codec.encode(node)
 	assert(unknowns and #unknowns == 1 and unknowns[1] == thread)
 
-	local decoded = diff_codec.decode(buf, unknowns)
+	local decoded = diff_codec.decode(buf, nil, unknowns)
 	assert(decoded.changes.ref == thread)
 end
 

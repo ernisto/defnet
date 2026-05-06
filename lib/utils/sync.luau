@@ -1,12 +1,14 @@
+local codec = require './codec'
 local diff_algo = require './diff'
 local diff_codec = require './diff_codec'
 
 -- defs
-type packet = { buf: buffer, unknowns: { any } }
+type packet = { buf: buffer, unknowns: { any }? }
 export type syncer<Receiver> = {
 	send: (target: Receiver, packet) -> (),
 	targets: { [Receiver]: any },
 	snapshots: { [Receiver]: any },
+	pools: { [Receiver]: codec.pool }?,
 	default: any,
 }
 
@@ -14,8 +16,15 @@ export type syncer<Receiver> = {
 local function create<Receiver>(params: {
 	default: any,
 	send: (target: Receiver, packet) -> (),
+	pools: { [Receiver]: codec.pool }?,
 }): syncer<Receiver>
-	return { default = params.default, send = params.send, targets = {}, snapshots = {} }
+	return {
+		default = params.default,
+		send = params.send,
+		pools = params.pools,
+		targets = {},
+		snapshots = {},
+	}
 end
 local function remove<Receiver>(syncer: syncer<Receiver>, target: Receiver)
 	syncer.targets[target] = nil
@@ -51,12 +60,22 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		return packet
 	end
 
+	local pools = syncer.pools
 	local function send_one(target: Receiver)
 		local curr = syncer.targets[target]
 		local prev = syncer.snapshots[target] or syncer.default
+		local pool = if pools then pools[target] else nil
 
-		local packet = ensure_encoded(prev, curr)
-		if packet then syncer.send(target, packet :: any) end
+		if pool then
+			local diff = diff_algo.from(prev, curr)
+			if not diff_algo.is_empty(diff) then
+				local buf, unknowns = diff_codec.impl.encode(diff, pool)
+				syncer.send(target, { buf = buf, unknowns = unknowns })
+			end
+		else
+			local packet = ensure_encoded(prev, curr)
+			if packet then syncer.send(target, packet :: any) end
+		end
 
 		syncer.snapshots[target] = ensure_snapshot(curr)
 	end
@@ -77,8 +96,8 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 	diff_algo.reset_cache()
 end
 
-local function apply<T>(state: T, buf: buffer, unknowns: { any }?)
-	diff_algo.apply(state, diff_codec.impl.decode(buf, unknowns))
+local function apply<T>(state: T, buf: buffer, pool: codec.pool?, unknowns: { any }?)
+	diff_algo.apply(state, diff_codec.impl.decode(buf, pool, unknowns))
 end
 
 return table.freeze { create = create, remove = remove, step = step, apply = apply }

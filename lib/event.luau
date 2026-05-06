@@ -5,7 +5,7 @@ local scan_nan = require './utils/scan_nan'
 local codecs = {}
 
 -- defs
-type remote_desc<T> = { class: string, codec: codec.codec_impl<T, ...any>? }
+type remote_desc<T> = { class: string, codec: codec.codec_impl<T>? }
 
 export type event_type<T...> = {
 	fire_server: (T...) -> (),
@@ -18,7 +18,7 @@ export type event_type<T...> = {
 }
 
 -- functions
-local function define<T...>(codec: codec.codec_impl<any, ...any>?): event_type<T...>
+local function define<T...>(codec: codec.codec_impl<any>?): event_type<T...>
 	return { class = 'RemoteEvent', codec = codec } :: any
 end
 local function wrap_codec<T>(remote: RemoteEvent, codec_impl: codec.codec_impl<T>): event_type<(T)>
@@ -47,15 +47,15 @@ local function wrap_codec<T>(remote: RemoteEvent, codec_impl: codec.codec_impl<T
 			end
 		end,
 		on_client = function(handler: (T) -> ())
-			return remote.OnClientEvent:Connect(function(...)
-				local data = codec_impl.decode(...)
+			return remote.OnClientEvent:Connect(function(buf: buffer, unknowns: { any }?)
+				local data = codec_impl.decode(buf, nil, unknowns)
 				scan_nan.scan(data)
 				handler(data)
 			end)
 		end,
 		on_server = function(handler: (Player, T) -> ())
-			return remote.OnServerEvent:Connect(function(player: Player, ...)
-				local data = codec_impl.decode(...)
+			return remote.OnServerEvent:Connect(function(player: Player, buf: buffer, unknowns: { any }?)
+				local data = codec_impl.decode(buf, nil, unknowns)
 				scan_nan.scan(data)
 				handler(player, data)
 			end)

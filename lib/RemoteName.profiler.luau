@@ -14,7 +14,7 @@ return function(
 	return {
 		{
 			Name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', ''),
-			Data = { codec.decode(args[1], args[2]) },
+			Data = { codec.decode(args[1], nil, args[2]) },
 		},
 	}
 end
