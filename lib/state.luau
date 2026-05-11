@@ -67,7 +67,7 @@ local function wrap<T>(remote: RemoteEvent, desc: remote_desc<T>): state_type<T>
 	return table.freeze { changed = listen_changed, step = step, server = syncer.targets } :: any
 end
 local function define<T>(default: T?): state_type<T>
-	return { rbxclass = 'state', wrap = wrap, codec = codec, default = default } :: any
+	return { rbxclass = 'RemoteEvent', wrap = wrap, codec = codec, default = default } :: any
 end
 
 -- functions

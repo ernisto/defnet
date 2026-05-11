@@ -14,7 +14,7 @@ local function ensure_instance(parent: Instance, class: string, name: string)
 	local instance = Instance.new(class)
 
 	instance.Name = name
-	instance.Parent = script
+	instance.Parent = parent
 	return instance
 end
 local function define_remotes<T>(remotes_def: T, root: Instance?): T
@@ -24,7 +24,7 @@ local function define_remotes<T>(remotes_def: T, root: Instance?): T
 	for name, desc: any in remotes_def do
 		if type(desc.rbxclass) == 'string' then
 			local rbx = ensure_instance(parent, desc.rbxclass, name)
-			remotes_def[name] = desc.wrap(rbx)
+			remotes_def[name] = desc.wrap(rbx, desc)
 		else
 			local folder = ensure_instance(parent, 'Folder', name)
 			remotes_def[name] = define_remotes(desc, folder)
