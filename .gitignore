@@ -4,3 +4,6 @@
 
 # rojo
 sourcemap.json
+
+# secrets
+.env

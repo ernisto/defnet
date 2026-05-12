@@ -1,4 +1,4 @@
-local scan_nan = require '../lib/utils/nan_scanner'
+local scan_nan = require '../../lib/utils/nan_scanner'
 
 local test = {}
 
