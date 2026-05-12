@@ -1,0 +1,14 @@
+{
+    "name": "defnet",
+    "emitLegacyScripts": false,
+    "tree": {
+        "$className": "DataModel",
+        "ReplicatedStorage": {
+            "packages": {
+                "defnet": {
+                    "$path": "lib"
+                }
+            }
+        }
+    }
+}

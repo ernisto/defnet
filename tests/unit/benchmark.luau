@@ -1,12 +1,12 @@
-local codec = require '../lib/utils/codec'
+local codec = require '../../lib/utils/codec'
 local encode = codec.impl.encode
 local decode = codec.impl.decode
 
-local diff_codec = require '../lib/utils/diff_codec'
+local diff_codec = require '../../lib/utils/diff_codec'
 local encode_diff = diff_codec.impl.encode
 local decode_diff = diff_codec.impl.decode
 
-local diff_algo = require '../lib/utils/diff'
+local diff_algo = require '../../lib/utils/diff'
 local diff_from = diff_algo.from
 local apply_diff = diff_algo.apply
 local snapshot = diff_algo.snapshot

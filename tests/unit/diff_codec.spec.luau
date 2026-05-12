@@ -1,4 +1,4 @@
-local diff_codec = require('../lib/utils/diff_codec').impl
+local diff_codec = require('../../lib/utils/diff_codec').impl
 
 local test = {}
 
