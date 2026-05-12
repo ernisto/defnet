@@ -1,6 +1,5 @@
-# pesde
-**/*_packages/**
-**/.pesde/**
-
 # rojo
 sourcemap.json
+
+# secrets
+.env

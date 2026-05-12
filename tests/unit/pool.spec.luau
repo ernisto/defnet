@@ -1,6 +1,6 @@
-local codec = require '../lib/utils/codec'
-local diff_codec = require '../lib/utils/diff_codec'
-local sync = require '../lib/utils/sync'
+local codec = require '../../lib/utils/codec'
+local diff_codec = require '../../lib/utils/diff_codec'
+local sync = require '../../lib/utils/sync'
 
 local test = {}
 

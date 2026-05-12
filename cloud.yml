@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ernisto/ro-sync/refs/heads/main/assets/manifest.schema.json
+
+owner:
+  user: 414709355
+
+universe:
+  is_friends_only: true
+
+places:
+  tests:
+    display_name: defnet [test-runner]
+
+version: 1

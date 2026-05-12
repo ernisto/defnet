@@ -1,0 +1,22 @@
+{
+  "name": "defnet",
+  "emitLegacyScripts": false,
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "packages": {
+        "$className": "Folder",
+        "defnet": {
+          "$path": "lib"
+        }
+      }
+    },
+    "ServerStorage": {
+      "tests": {
+        "$path": {
+          "optional": "tests/roblox"
+        }
+      }
+    }
+  }
+}

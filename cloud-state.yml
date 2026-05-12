@@ -1,0 +1,66 @@
+'places':
+  'tests':
+   'input':
+    'allow_copying':
+     false
+    'conflicts':
+     
+    'custom_social_slots_count':
+     15
+    'description':
+     ''
+    'display_name':
+     'defnet [test-runner]'
+    'is_all_genres_allowed':
+     true
+    'server_size':
+     50
+    'social_slot_type':
+     'Automatic'
+    
+   'place_id':
+    95525691623663
+   'universe_id':
+    10235501704
+   
+  
+'universe':
+  'input':
+   'allow_private_servers':
+    false
+   'conflicts':
+    
+   'console':
+    false
+   'desktop':
+    true
+   'genre':
+    'All'
+   'is_archived':
+    false
+   'is_for_sale':
+    false
+   'is_friends_only':
+    false
+   'is_mesh_texture_api_access_allowed':
+    false
+   'mobile':
+    true
+   'price':
+    0
+   'studio_access_to_apis_allowed':
+    false
+   'tablet':
+    true
+   'voice_chat':
+    true
+   'vr':
+    true
+   
+  'universe_id':
+   10235501704
+  
+'universe_id':
+  10235501704
+'version':
+  1

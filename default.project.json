@@ -1,6 +1,6 @@
 {
-    "name": "defnet",
-    "tree": {
-        "$path": "lib"
-    }
+  "name": "defnet",
+  "tree": {
+    "$path": "lib"
+  }
 }

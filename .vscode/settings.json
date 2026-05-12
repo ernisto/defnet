@@ -3,10 +3,8 @@
   "editor.formatOnSave": true,
   "files.eol": "\n",
   "files.exclude": {
-    "**/*-lock.*": true,
-    "**/*.lock.*": true,
-    "**/*.lock": true,
     "**/.luaurc": true,
+    "*-state.yml": true,
     ".gitattributes": true,
     ".gitignore": true,
     ".github": true,
@@ -23,9 +21,6 @@
   },
   "files.readonlyInclude": {
     "**/LICENSE": true,
-    "**/*-lock.*": true,
-    "**/*.lock.*": true,
-    "**/*.lock": true,
     "sourcemap.json": true
   },
   "luau-lsp.platform.type": "roblox",
@@ -35,6 +30,7 @@
   "luau-lsp.bytecode.vectorType": "Vector3",
   "luau-lsp.completion.imports.requireStyle": "alwaysRelative",
   "luau-lsp.completion.imports.stringRequires.enabled": true,
+  "luau-lsp.sourcemap.rojoProjectFile": "dev.project.json",
   "luau-lsp.types.robloxSecurityLevel": "LocalUserSecurity",
   "luau-lsp.types.definitionFiles": {
     "vector": "https://gist.githubusercontent.com/ernisto/3b0e3513700e20ccf8011efc77de234e/raw/3b140bcb8d6d7953d628bb3f3b6cf49d9784fbaf/vector.d.luau"
