@@ -1,34 +1,39 @@
 local fs = require '@lute/fs'
 local process = require '@lute/process'
 
-local result = process.run {
-	'git',
-	'for-each-ref',
-	'--sort=-creatordate',
-	'--format=%(refname:short)',
-	'--count=1',
-	'refs/tags',
-}
-assert(result.ok, `git for-each-ref failed: {result.stderr}`)
+-- functions
+local function await_query_latest_version_tag(): string
+	local result = process.run {
+		'git',
+		'for-each-ref',
+		'--sort=-creatordate',
+		'--format=%(refname:short)',
+		'--count=1',
+		'refs/tags',
+	}
+	assert(result.ok, `git for-each-ref failed: {result.stderr}`)
 
-local tag = result.stdout:match '^%s*(.-)%s*$'
-if tag == '' then
-	print 'no tag found'
-	return
+	local tag = result.stdout:match '^%s*(.-)%s*$'
+	assert(tag, `invalid tag '{tag}'`)
+
+	return tag:match '^v?(.+)$' or tag
 end
 
-local version = tag:match '^v?(.+)$' or error(`invalid tag: {tag}`)
+local function update_toml_version(path, version)
+	local handle = fs.open(path, 'r')
+	local contents = fs.read(handle)
+	fs.close(handle)
 
-local path = 'wally.toml'
-local handle = fs.open(path, 'r')
-local contents = fs.read(handle)
-fs.close(handle)
+	local updated, n = contents:gsub('(version%s*=%s*")[^"]*(")', `%1{version}%2`, 1)
+	assert(n == 1, `no version field found in {path}`)
 
-local updated, n = contents:gsub('version%s*=%s*"[^"]*"', `version = "{version}"`, 1)
-assert(n == 1, 'no version field found in wally.toml')
+	handle = fs.open(path, 'w')
+	fs.write(handle, updated)
+	fs.close(handle)
 
-handle = fs.open(path, 'w')
-fs.write(handle, updated)
-fs.close(handle)
+	print(`{path} version -> {version}`)
+end
 
-print(`wally.toml version -> {version}`)
+-- run
+local version = await_query_latest_version_tag()
+update_toml_version('wally.toml', version)
