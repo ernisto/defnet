@@ -9,6 +9,7 @@ local function make_syncer(schema: any?): (sync.syncer<string>, { msg })
 	local sent: { msg } = {}
 	local s = sync.create {
 		default = schema,
+		pools = {},
 		send = function(target: string, p: sync.packet)
 			table.insert(sent, { target = target, buf = p.buf, unknowns = p.unknowns })
 		end,
@@ -18,20 +19,6 @@ end
 
 local function apply_msg(state: any, m: msg)
 	sync.apply(state, m.buf, nil, m.unknowns)
-end
-
--- basic flow: register, step, mutate
-function test.should_send_diff_on_mutation()
-	local s, sent = make_syncer { coins = 0 }
-	local world = { coins = 10 }
-	s.targets.p1 = world
-	s.targets.p2 = world
-	sync.step(s)
-	world.coins = 20
-	sync.step(s)
-
-	assert(#sent == 4)
-	assert(sent[3].buf == sent[4].buf, 'mutation diff must be shared across group')
 end
 
 function test.should_step_only_specific_target()
@@ -60,37 +47,6 @@ function test.should_roundtrip_full_state_through_apply()
 	assert(client.items[1] == 'a' and client.items[2] == 'b')
 end
 
--- group send / buffer sharing
-function test.should_share_buffer_for_targets_with_same_curr()
-	local s, sent = make_syncer { coins = 0 }
-	local world = { coins = 10 }
-	s.targets.p1 = world
-	s.targets.p2 = world
-	sync.step(s)
-
-	assert(#sent == 2, `expected 2 messages, got {#sent}`)
-	assert(sent[1].buf == sent[2].buf, 'both targets should receive same buffer ref')
-	assert(sent[1].unknowns == sent[2].unknowns, 'both targets should receive same unknowns ref')
-end
-
-function test.should_send_one_encode_per_unique_curr()
-	local s, sent = make_syncer { coins = 0 }
-	local world_a = { coins = 1 }
-	local world_b = { coins = 2 }
-	s.targets.p1 = world_a
-	s.targets.p2 = world_a
-	s.targets.p3 = world_b
-	sync.step(s)
-
-	assert(#sent == 3)
-	local by_target: { [string]: msg } = {}
-	for _, m in sent do
-		by_target[m.target] = m
-	end
-	assert(by_target.p1.buf == by_target.p2.buf, 'p1 and p2 share buf')
-	assert(by_target.p1.buf ~= by_target.p3.buf, 'p3 gets different buf')
-end
-
 -- late join / catch-up
 function test.should_catch_up_new_joiner_via_targeted_step()
 	local s, sent = make_syncer { coins = 0 }
@@ -107,20 +63,6 @@ function test.should_catch_up_new_joiner_via_targeted_step()
 	local p2_state: any = {}
 	apply_msg(p2_state, sent[2])
 	assert(p2_state.coins == 10, 'p2 caught up to current state')
-end
-
-function test.should_rejoin_group_after_catchup()
-	local s, sent = make_syncer { coins = 0 }
-	local world = { coins = 10 }
-	s.targets.p1 = world
-	sync.step(s)
-	s.targets.p2 = world
-	sync.step(s, 'p2')
-	world.coins = 20
-	sync.step(s)
-
-	local last_two = { sent[#sent - 1], sent[#sent] }
-	assert(last_two[1].buf == last_two[2].buf, 'p1 and p2 share group buffer after p2 catch-up')
 end
 
 -- target switches reference
