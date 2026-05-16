@@ -208,6 +208,8 @@ local push_size, pop_size = push_varint, pop_varint
 local push_tab, pop_tab
 
 local function push_unknown(value: any)
+	register_push_identity(value)
+
 	local existing_index = table.find(unknowns, value)
 	local index = existing_index or #unknowns + 1
 
@@ -215,7 +217,10 @@ local function push_unknown(value: any)
 	push_size(index)
 end
 local function pop_unknown(): any
-	return unknowns[pop_size()]
+	local value = unknowns[pop_size()]
+
+	register_pop_identity(value)
+	return value
 end
 
 local function push_nil(_: nil)
