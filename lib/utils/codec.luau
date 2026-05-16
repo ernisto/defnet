@@ -299,7 +299,8 @@ local function push_identity(tab: table)
 	push_size(val_to_id[tab])
 end
 local function pop_identity(): table
-	return id_to_val[pop_size()]
+	local id = pop_size()
+	return id_to_val[id] or warn(`couldnt read pool id {id}`)
 end
 
 local function push_value(value: any)
