@@ -2,10 +2,9 @@ local Players = game:GetService 'Players'
 
 local codec = require './utils/codec'
 local scan_nan = require './utils/scan_nan'
-local codecs = {}
 
 -- defs
-type remote_desc<T> = { class: string, codec: codec.codec_impl<T>? }
+type remote_desc<T> = { rbxclass: string, codec: codec.codec_impl<T>? }
 
 export type event_type<T...> = {
 	fire_server: (T...) -> (),
@@ -19,8 +18,6 @@ export type event_type<T...> = {
 
 -- functions
 local function wrap_codec<T>(remote: RemoteEvent, codec_impl: codec.codec_impl<T>): event_type<(T)>
-	codecs[remote] = codec_impl
-
 	return table.freeze {
 		fire_server = function(t: T)
 			remote:FireServer(codec_impl.encode(t))
@@ -102,4 +99,4 @@ local function define<T...>(codec: codec.codec_impl<any>?): event_type<T...>
 end
 
 -- module
-return table.freeze { codecs = codecs, define = define, wrap = wrap }
+return table.freeze { define = define, wrap = wrap }

@@ -7,7 +7,7 @@ remote_func_debug_event.Name = 'RemoteFunctionEvent.profiler'
 
 -- defs
 type codec_impl<Data, Encoded...> = { encode: (Data) -> Encoded..., decode: (Encoded...) -> Data }
-type remote_desc<T> = { class: string, codec: codec_impl<T, ...any>? }
+type remote_desc<T> = { rbxclass: string, codec: codec_impl<T, ...any>? }
 
 export type func_type<T..., R...> = {
 	invoke_server: (T...) -> R...,
