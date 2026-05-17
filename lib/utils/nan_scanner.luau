@@ -1,4 +1,4 @@
-local function scan(value: any)
+local function assert_valid(value: any)
 	local kind = type(value)
 	if kind == 'number' then
 		assert(not math.isnan(value), 'NaN received')
@@ -6,16 +6,16 @@ local function scan(value: any)
 		assert(not math.isnan(value.x + value.y + value.z), 'NaN received')
 	elseif kind == 'table' then
 		for key, val in value do
-			scan(key)
-			scan(val)
+			assert_valid(key)
+			assert_valid(val)
 		end
 	end
 end
 
-local function scan_args(...: any)
+local function assert_valid_tuple(...: any)
 	for index = 1, select('#', ...) do
-		scan(select(index, ...))
+		assert_valid(select(index, ...))
 	end
 end
 
-return table.freeze { scan = scan, scan_args = scan_args }
+return table.freeze { assert_valid = assert_valid, assert_valid_tuple = assert_valid_tuple }

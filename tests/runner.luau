@@ -3,7 +3,7 @@ local suites = {
 	require './diff.spec',
 	require './diff_codec.spec',
 	require './pool.spec',
-	require './scan_nan.spec',
+	require './nan_scanner.spec',
 	require './sync.spec',
 }
 
