@@ -49,19 +49,19 @@ local function define_remotes<T>(remotes_def: T, root: Instance?): T
 	local parent: Instance = root or ensure_instance(script, 'Folder', 'rbx')
 
 	for name, desc in deterministic_iter<<remote_desc>>(remotes_def) do
-		if type(desc.rbxclass) == 'string' then
-			desc.id = remote_index.reserve_id(name)
-			local rbx = if desc.single
-				then remote_index.ensure_single(parent)
-				else ensure_instance(parent, desc.rbxclass, name)
-
-			if desc.codec then remote_index.set_codec(rbx, desc.codec) end
-
-			remotes_def[name] = desc.wrap(rbx, desc)
-		else
+		if type(desc.rbxclass) ~= 'string' then
 			local folder = ensure_instance(parent, 'Folder', name)
 			remotes_def[name] = define_remotes(desc, folder)
+
+			continue
 		end
+		desc.id = remote_index.reserve_id(name)
+		local rbx = ensure_instance(parent, desc.rbxclass, name)
+
+		if desc.single then remote_index.ensure_single(parent) end
+		if desc.codec then remote_index.set_codec(rbx, desc.codec) end
+
+		remotes_def[name] = desc.wrap(rbx, desc)
 	end
 
 	return table.freeze(remotes_def) :: any

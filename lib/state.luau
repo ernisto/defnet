@@ -23,30 +23,23 @@ local server_pools: { [Player]: codec.pool } = {}
 local registry: { sync.syncer<Player> } = {}
 
 -- definition
-local function wrap<T>(_remote: Instance, desc: remote_desc<T>): state_type<T>
-	local listeners: { () -> () } = {}
-	local function listen_changed(listener: () -> ())
-		table.insert(listeners, listener)
-	end
-	local function fire_listeners()
-		for _, listener in listeners do
-			task.spawn(listener)
-		end
+local function wrap<T>(event: BindableEvent, desc: remote_desc<T>): state_type<T>
+	local function listen_changed(callback)
+		return event.Event:Connect(callback)
 	end
 
-	local id = desc.id
 	if is_client then
 		local self = { changed = listen_changed, client = desc.default or {} }
-		remote_index.on(id, function(buf: buffer, unknowns: { any })
+		remote_index.on(desc.id, function(buf: buffer, unknowns: { any })
 			sync.apply(self.client, buf, remote_index.client_pool, unknowns)
-			fire_listeners()
+			event:Fire()
 		end)
 		return self :: any
 	end
 
 	local function send(player: Player, packet)
-		remote_index.fire(id, player, packet.buf, packet.unknowns)
-		fire_listeners()
+		remote_index.fire(desc.id, player, packet.buf, packet.unknowns)
+		event:Fire()
 	end
 	local syncer = sync.create {
 		default = diff.snapshot(desc.default),
@@ -61,7 +54,7 @@ local function wrap<T>(_remote: Instance, desc: remote_desc<T>): state_type<T>
 	return table.freeze { changed = listen_changed, step = step, server = syncer.targets } :: any
 end
 local function define<T>(default: T?): state_type<T>
-	return { rbxclass = 'RemoteEvent', wrap = wrap, codec = diff_codec.impl, default = default, single = true } :: any
+	return { rbxclass = 'BindableEvent', wrap = wrap, codec = diff_codec.impl, default = default, single = true } :: any
 end
 
 -- functions
