@@ -1,23 +1,25 @@
-local codec = require './codec'
-local diff_algo = require './diff'
-local diff_codec = require './diff_codec'
+local codec = require "./codec"
+local diff_algo = require "./diff"
+local diff_codec = require "./diff_codec"
 
--- defs
-export type packet = { buf: buffer, unknowns: { any }? }
-export type syncer<Receiver> = {
-	send: (target: Receiver, packet) -> (),
-	targets: { [Receiver]: any },
-	snapshots: { [Receiver]: any },
-	pools: { [Receiver]: codec.pool },
+export type packet = {
+	buf: buffer,
+	unknowns: { any }?,
+}
+
+export type syncer = {
+	send: (Player, packet) -> (),
+	targets: { [Player]: any },
+	snapshots: { [Player]: any },
+	pools: { [Player]: codec.pool },
 	default: any,
 }
 
--- functions
-local function create<Receiver>(params: {
+local function create(params: {
 	default: any,
-	send: (target: Receiver, packet) -> (),
-	pools: { [Receiver]: codec.pool },
-}): syncer<Receiver>
+	send: (Player, packet) -> (),
+	pools: { [Player]: codec.pool },
+	}): syncer
 	return {
 		default = params.default,
 		send = params.send,
@@ -26,56 +28,106 @@ local function create<Receiver>(params: {
 		snapshots = {},
 	}
 end
-local function remove<Receiver>(syncer: syncer<Receiver>, target: Receiver)
-	syncer.targets[target] = nil
-	syncer.snapshots[target] = nil
+
+local function remove(syncer: syncer, player: Player)
+	syncer.targets[player] = nil
+	syncer.snapshots[player] = nil
 end
 
-local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
-	local snapshots: { [any]: any } = {}
-	local pools = syncer.pools
+local function step(syncer: syncer, player: Player?)
+	local snapshots_cache: { [any]: any } = {}
 
-	local function ensure_snapshot<T>(curr: T): T
-		local snapshot = snapshots[curr]
-		if snapshot then return snapshot end
+	local function ensure_snapshot(current: any): any
+		local snapshot = snapshots_cache[current]
 
-		snapshot = diff_algo.snapshot(curr)
-		snapshots[curr] = snapshot
+		if snapshot then
+			return snapshot
+		end
+
+		snapshot = diff_algo.snapshot(current)
+		snapshots_cache[current] = snapshot
+
 		return snapshot
 	end
 
-	local function send_one(target: Receiver)
-		local curr = syncer.targets[target]
-		local prev = syncer.snapshots[target] or syncer.default
+	local function send_one(target_player: Player)
+		local current = syncer.targets[target_player]
 
-		local diff = diff_algo.from(prev, curr)
-		if diff_algo.is_empty(diff) then return end
+		if current == nil then
+			return
+		end
 
-		local buf, unknowns = diff_codec.impl.encode(diff, pools[target])
-		syncer.send(target, { buf = buf, unknowns = unknowns })
+		local previous = syncer.snapshots[target_player] or syncer.default
+		local diff_node = diff_algo.from(previous, current)
 
-		syncer.snapshots[target] = ensure_snapshot(curr)
+		if diff_algo.is_empty(diff_node) then
+			return
+		end
+
+		local buf, unknowns = diff_codec.impl.encode(diff_node, syncer.pools[target_player])
+
+		syncer.send(target_player, {
+			buf = buf,
+			unknowns = unknowns,
+		})
+
+		syncer.snapshots[target_player] = ensure_snapshot(current)
 	end
 
-	if target then
-		send_one(target)
+	if player then
+		send_one(player)
 	else
-		for receiver in syncer.targets do
-			send_one(receiver)
+		for target_player in syncer.targets do
+			send_one(target_player)
 		end
 	end
 
-	-- remove snapshots of removed targets
-	for receiver in syncer.snapshots do
-		if syncer.targets[receiver] == nil then syncer.snapshots[receiver] = nil end
+	for target_player in syncer.snapshots do
+		if syncer.targets[target_player] == nil then
+			syncer.snapshots[target_player] = nil
+		end
 	end
 
 	diff_algo.reset_cache()
 end
 
-local function apply<T>(state: T, buf: buffer, pool: codec.pool?, unknowns: { any }?)
-	diff_algo.apply(state, diff_codec.impl.decode(buf, pool, unknowns))
+local function diff_to_patch(node)
+	local patch = {
+		changed = {},
+		removed = {},
+		children = {},
+	}
+
+	if not node then
+		return patch
+	end
+
+	for key, value in node.changes do
+		patch.changed[key] = value
+	end
+
+	for _, key in node.removes do
+		table.insert(patch.removed, key)
+	end
+
+	for key, child in node.children do
+		patch.children[key] = diff_to_patch(child)
+	end
+
+	return patch
 end
 
--- module
-return table.freeze { create = create, remove = remove, step = step, apply = apply }
+local function apply(state: any, buf: buffer, pool: codec.pool?, unknowns: { any }?)
+	local diff_node = diff_codec.impl.decode(buf, pool, unknowns)
+
+	diff_algo.apply(state, diff_node)
+
+	return diff_to_patch(diff_node)
+end
+
+return table.freeze {
+	create = create,
+	remove = remove,
+	step = step,
+	apply = apply,
+}
