@@ -1,88 +1,356 @@
-# defnet [![Tests](https://github.com/ernisto/defnet/actions/workflows/check.yml/badge.svg)](https://github.com/ernisto/defnet/actions/workflows/check.yml)
+# 🚀 DefNet
 
-Small Roblox networking library. Declare remotes once, share the module between server and client. Optional binary codec and server-authoritative replicated state.
+> Fast, typed, secure and lightweight networking framework for Roblox.
 
-## Installation
+DefNet is a networking library focused on:
 
-- Download (`defnet.rbxm`) from [latest release](https://github.com/ernisto/defnet/releases/latest)
+* ⚡ performance
+* 🧠 strong typing
+* 🔒 exploit protection
+* 🧬 codec support
+* 🔄 state replication
+* 📦 automatic remote generation
 
-- Wally (`wally.toml`): add under `[dependencies]`
+Built for modern Roblox networking.
+
+---
+
+# ✨ Features
+
+## ⚡ Fast Networking
+
+* optimized remote wrappers
+* minimal overhead
+* delta replication support
+* codec pipeline integration
+* automatic remote indexing
+
+---
+
+## 🧠 Typed APIs
+
+DefNet supports Luau generics out of the box.
+
+```lua
+local event = net.event<number, string>()
+local func = net.func<string, boolean>()
+```
+
+---
+
+## 🔒 Built-in Security
+
+DefNet now includes:
+
+* schema validation
+* rate limiting
+* safe callbacks
+* invoke timeout protection
+* codec validation pipeline
+
+---
+
+## 📦 Automatic Remote Creation
+
+Server automatically creates:
+
+* `RemoteEvent`
+* `RemoteFunction`
+* folders
+
+Clients automatically fetch and wrap them.
+
+---
+
+## 🧬 Codec Support
+
+Supports custom codecs:
+
+```lua
+net.event(my_codec)
+```
+
+or:
+
+```lua
+net.event({
+	codec = my_codec
+})
+```
+
+Validation is automatically integrated into:
+
+* `encode`
+* `decode`
+
+through the codec pipeline.
+
+---
+
+## 🔄 State Replication
+
+Built-in replicated state system with:
+
+* diff replication
+* delta syncing
+* heartbeat sync
+* manual sync support
+
+---
+
+# 📁 Structure
+
+```text
+defnet
+├─ utils
+│  ├─ codec
+│  ├─ diff
+│  ├─ diff_codec
+│  ├─ nan_scanner
+│  ├─ sync
+│  ├─ guard
+│  ├─ types
+│  └─ codec_guard
+├─ event
+├─ func
+├─ state
+└─ remote_index
+```
+
+---
+
+# 📥 Installation
+
+## Wally
+
 ```toml
-defnet = "ernisto/defnet@0.1.0-alpha.2"
+[dependencies]
+defnet = "ernisto/defnet@latest"
 ```
 
-- Pesde in roblox (terminal):
-```sh
-pesde add wally#ernisto/defnet
-```
+---
 
-## Declare remotes
+# 🚀 Usage
+
+## Shared
 
 ```lua
--- shared/net.luau
-local net = require(ReplicatedStorage.Packages.net)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-return net.remotes {
-    chat = {
-        send = net.event<<(string)>>(),
-        history = net.func<<(), ({ string })>>(),
-    },
-    world = net.state { players = {} :: { [string]: Vector3 } },
-}
+local net = require(ReplicatedStorage.Shared.defnet)
+local types = require(ReplicatedStorage.Shared.defnet.utils.types)
+
+return net.remotes({
+	damage = net.event({
+		schema = {
+			types.number,
+		},
+
+		rate_limit = 10,
+		rate_window = 1,
+	}),
+
+	get_coins = net.func({
+		timeout = 5,
+	}),
+})
 ```
 
-Call `net.remotes(def, root?)` once at module load. Server instantiates the `RemoteEvent`/`RemoteFunction`/`Folder` tree; client `WaitForChild`s it. The def table is mutated in-place and frozen.
+---
 
-## Event
+## Server
 
 ```lua
--- server
-net.chat.send.on_server(function(player, message)
-    print(player.Name, message)
+local remotes = require(path.to.shared_remotes)
+
+remotes.damage:on_server(function(player, amount)
+	print(player.Name, amount)
 end)
-net.chat.send.fire_all 'hello'
-net.chat.send.fire_list({ p1, p2 }, 'hi')
-net.chat.send.fire_except(p1, 'not you')
 
--- client
-net.chat.send.on_client(function(message) ... end)
-net.chat.send.fire_server 'ping'
-```
-
-Pass a codec to `net.event(codec)` to binary-encode payloads. Built-in `net.codec` covers nil, bool, number, string (ASCII), vector, table, buffer. Unknowns (instances, etc.) flow through a side-channel.
-
-## Func
-
-```lua
--- server
-function net.chat.history.on_server_invoke(player)
-    return {...}
+remotes.get_coins.on_server_invoke = function(player)
+	return 100
 end
-
--- client
-local msgs = net.chat.history.invoke_server()
 ```
 
-## State
+---
 
-Server-authoritative replicated state. Diffed every `Heartbeat`, only the delta goes on the wire.
+## Client
 
 ```lua
-local world = { players = {} }
+local remotes = require(path.to.shared_remotes)
 
--- server: write into targets[player]
-net.world.server[player1] = world
-table.insert(world.players, 'alice')
+remotes.damage:fire_server(25)
 
-net.world.server[player2] = world
-table.insert(world.players, 'bob')
+local coins = remotes.get_coins:invoke_server()
 
--- client: read current snapshot
-print(net.world.client.players)
+print(coins)
 ```
 
-Call `net.step_sync()` to flush all syncers manually; otherwise it runs on `Heartbeat`.
+---
 
-## License
+# 🔒 Security
 
-MIT
+## ✅ Schema Validation
+
+Validate payloads automatically.
+
+```lua
+net.event({
+	schema = {
+		types.number,
+		types.string,
+	}
+})
+```
+
+---
+
+## ✅ Rate Limit
+
+Prevent remote spam and flooding.
+
+```lua
+net.event({
+	rate_limit = 10,
+	rate_window = 1,
+})
+```
+
+---
+
+## ✅ Invoke Timeout
+
+Prevent `InvokeClient()` server hangs.
+
+```lua
+net.func({
+	timeout = 5
+})
+```
+
+---
+
+## ✅ Safe Callback Protection
+
+All callbacks are protected using `pcall`.
+
+---
+
+## ✅ Codec Validation Pipeline
+
+Payload validation is integrated directly into:
+
+* `encode`
+* `decode`
+
+when using codecs.
+
+---
+
+# 📚 Added Utilities
+
+## `utils/types`
+
+Payload validation utilities.
+
+### Included
+
+* `types.number`
+* `types.string`
+* `types.boolean`
+* `types.table`
+* `types.vector3`
+* `types.player`
+* `types.optional`
+* `types.array`
+* `types.shape`
+
+---
+
+## `utils/guard`
+
+Central networking protection system.
+
+### Includes
+
+* rate limiting
+* payload validation
+* safe callback execution
+* abuse prevention
+
+---
+
+## `utils/codec_guard`
+
+Codec wrapper for validation-aware encode/decode pipelines.
+
+---
+
+# 🧩 API Compatibility
+
+DefNet keeps full compatibility with:
+
+* existing codecs
+* existing descriptors
+* existing wrappers
+* generic typing
+* original API structure
+
+Supported:
+
+```lua
+net.event(codec)
+net.func()
+```
+
+---
+
+# 🧬 Typing Support
+
+DefNet preserves the original Luau generic architecture.
+
+```lua
+event_type<T...>
+func_type<T..., R...>
+```
+
+---
+
+# 🎯 Goals
+
+DefNet aims to be:
+
+* lightweight
+* fast
+* typed
+* secure
+* production-ready
+
+while keeping the API minimal and clean.
+
+---
+
+# 🛣️ Planned Features
+
+* player scoped replication
+* unreliable remotes
+* middleware system
+* replication filters
+* advanced compression
+* ECS integration
+* profiling tools
+* prediction utilities
+* state visibility filtering
+
+---
+
+# ❤️ Credits
+
+Created by Ernisto.
+Security and networking improvements contributed by the community.
+
+---
+
+# 📜 License
+
+MIT License.
