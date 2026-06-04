@@ -1,5 +1,6 @@
 local RunService = game:GetService 'RunService'
 local is_client = RunService:IsClient()
+local is_plugin = not RunService:IsRunning()
 
 local codec = require '@self/utils/codec'
 local event = require '@self/event'
@@ -35,7 +36,7 @@ local function deterministic_iter<V>(tabl: { string: V }): () -> (string, V)
 	end
 end
 local function ensure_instance(parent: Instance, class: string, name: string)
-	if is_client then return parent:WaitForChild(name) end
+	if is_client and not is_plugin then return parent:WaitForChild(name) end
 	local instance = Instance.new(class)
 
 	instance.Name = name
@@ -46,7 +47,7 @@ end
 -- functions
 local function define_remotes<T>(remotes_def: T, root: Instance?): T
 	assert(type(remotes_def) == 'table', 'refine type')
-	local parent: Instance = root or ensure_instance(script, 'Folder', 'rbx')
+	local parent: Instance = root or ensure_instance(if is_plugin then nil :: any else script, 'Folder', 'rbx')
 
 	for name, desc in deterministic_iter<<remote_desc>>(remotes_def) do
 		if type(desc.rbxclass) ~= 'string' then

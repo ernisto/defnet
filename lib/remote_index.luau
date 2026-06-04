@@ -7,6 +7,7 @@ export type codec_impl = codec.codec_impl<any>
 type dispatcher = (...any) -> ()
 
 -- vars
+local is_plugin = not RunService:IsRunning()
 local is_client = RunService:IsClient()
 local client_pool = codec.create_pool()
 
@@ -39,7 +40,7 @@ local function ensure_single(parent: Instance): RemoteEvent
 	if single_remote then return single_remote end
 
 	local remote: RemoteEvent
-	if is_client then
+	if is_client and not is_plugin then
 		remote = parent:WaitForChild '__main__' :: RemoteEvent
 	else
 		remote = Instance.new 'RemoteEvent'
