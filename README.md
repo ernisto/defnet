@@ -8,7 +8,7 @@ Small Roblox networking library. Declare remotes once, share the module between 
 
 - Wally (`wally.toml`): add under `[dependencies]`
 ```toml
-defnet = "ernisto/defnet@0.1.0-alpha.2"
+defnet = "ernisto/defnet@0.1.0-alpha.7"
 ```
 
 - Pesde in roblox (terminal):
