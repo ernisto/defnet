@@ -41,7 +41,7 @@ jobs:
           curl -L https://gist.githubusercontent.com/ernisto/3b0e3513700e20ccf8011efc77de234e/raw/3b140bcb8d6d7953d628bb3f3b6cf49d9784fbaf/vector.d.luau -o dist/vector.d.luau
 
       - name: Lint
-        run: |
+        run: >
           luau-lsp analyze
           --platform roblox
           --base-luaurc .luaurc
