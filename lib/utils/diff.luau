@@ -42,6 +42,9 @@ local function is_array_index(key: any, max_len: number): boolean
 end
 
 local function from<T>(prev: any, curr: any): diff_node
+	prev = prev or {}
+	curr = curr or {}
+
 	local by_curr = cache[prev]
 	if by_curr then
 		local hit = by_curr[curr]
