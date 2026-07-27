@@ -2,8 +2,5 @@
 **/*_packages/**
 **/.pesde/**
 
-# claude code
-.claude/
-
 # rojo
 sourcemap.json

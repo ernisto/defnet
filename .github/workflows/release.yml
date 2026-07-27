@@ -2,6 +2,11 @@ name: Release
 on:
   workflow_dispatch:
   release:
+    types: [published]
+
+permissions:
+  id-token: write # Required for OIDC
+  contents: read
 
 jobs:
   check:
@@ -10,15 +15,11 @@ jobs:
 
   publish_wally:
     runs-on: ubuntu-latest
-    needs: [ check ]
+    needs: [check]
     steps:
-      - name: Checkout git files
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v2
 
-      - name: Setup rokit
-        uses: CompeyDev/setup-rokit@v0.1.2
+      - uses: CompeyDev/setup-rokit@v0.1.2
         with:
           token: ${{ github.token }}
 
@@ -35,15 +36,12 @@ jobs:
 
   release_file:
     runs-on: ubuntu-latest
-    needs: [ check ]
+    needs: [check]
     permissions:
       contents: write
     steps:
-      - name: Checkout git files
-        uses: actions/checkout@v2
-
-      - name: Setup rokit
-        uses: CompeyDev/setup-rokit@v0.1.2
+      - uses: actions/checkout@v2
+      - uses: CompeyDev/setup-rokit@v0.1.2
         with:
           token: ${{ github.token }}
 

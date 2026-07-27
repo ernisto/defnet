@@ -5,16 +5,17 @@ on:
   workflow_call:
   pull_request:
   push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "**"
 
 jobs:
   check-format:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout your Git repo
-        uses: actions/checkout@v2
-
-      - name: Check Format
-        uses: JohnnyMorganz/stylua-action@v4
+      - uses: actions/checkout@v6
+      - uses: JohnnyMorganz/stylua-action@v4
         with:
           token: ${{ github.token }}
           version: 2.5.2
@@ -23,11 +24,8 @@ jobs:
   lint-code:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout your git repo
-        uses: actions/checkout@v2
-
-      - name: Setup rokit
-        uses: CompeyDev/setup-rokit@v0.1.2
+      - uses: actions/checkout@v6
+      - uses: CompeyDev/setup-rokit@v0.1.2
         with:
           token: ${{ github.token }}
 
@@ -51,14 +49,11 @@ jobs:
           --ignore **/*_packages/**
           lib tests
 
-  unit-tests:
+  automated-tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout your Git repo
-        uses: actions/checkout@v2
-
-      - name: Setup rokit
-        uses: CompeyDev/setup-rokit@v0.1.2
+      - uses: actions/checkout@v6
+      - uses: CompeyDev/setup-rokit@v0.1.2
         with:
           token: ${{ github.token }}
 
