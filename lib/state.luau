@@ -66,17 +66,11 @@ end
 
 -- @server init
 if not is_client then
-	Players.PlayerAdded:Connect(function(player: Player)
-		server_pools[player] = codec.create_pool()
-	end)
-	for _, player in Players:GetPlayers() do
-		server_pools[player] = codec.create_pool()
-	end
 	Players.PlayerRemoving:Connect(function(player: Player)
-		server_pools[player] = nil
 		for _, s in registry do
 			sync.remove(s, player)
 		end
+		server_pools[player] = nil
 	end)
 	RunService.Heartbeat:Connect(function()
 		step_sync()

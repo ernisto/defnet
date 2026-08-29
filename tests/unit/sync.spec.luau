@@ -1,3 +1,4 @@
+local codec = require '../../lib/utils/codec'
 local diff_codec = require '../../lib/utils/diff_codec'
 local sync = require '../../lib/utils/sync'
 
@@ -17,13 +18,14 @@ local function make_syncer(schema: any?): (sync.syncer<string>, { msg })
 	return s, sent
 end
 
-local function apply_msg(state: any, m: msg)
-	sync.apply(state, m.buf, nil, m.unknowns)
+local function apply_msg(state: any, m: msg, pool)
+	sync.apply(state, m.buf, pool, m.unknowns)
 end
 
 function test.should_step_only_specific_target()
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
+
 	s.targets.p1 = world
 	s.targets.p2 = world
 	sync.step(s, 'p1')
@@ -36,8 +38,8 @@ end
 function test.should_roundtrip_full_state_through_apply()
 	local schema = { coins = 0, items = {}, stats = { hp = 0 } }
 	local s, sent = make_syncer(schema)
-	local world = { coins = 50, items = { 'a', 'b' }, stats = { hp = 80 } }
-	s.targets.p1 = world
+
+	s.targets.p1 = { coins = 50, items = { 'a', 'b' }, stats = { hp = 80 } }
 	sync.step(s)
 
 	local client: any = {}
@@ -51,8 +53,10 @@ end
 function test.should_catch_up_new_joiner_via_targeted_step()
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
+
 	s.targets.p1 = world
 	sync.step(s)
+
 	s.targets.p2 = world
 	sync.step(s, 'p2')
 
@@ -68,17 +72,19 @@ end
 -- target switches reference
 function test.should_send_resync_when_target_switches_curr()
 	local s, sent = make_syncer { coins = 0 }
-	local world_a = { coins = 1 }
-	local world_b = { coins = 99 }
-	s.targets.p1 = world_a
+
+	s.targets.p1 = { coins = 1 }
 	sync.step(s)
-	s.targets.p1 = world_b
+
+	s.targets.p1 = { coins = 99 }
 	sync.step(s)
 
 	assert(#sent == 2)
 	local client: any = {}
-	apply_msg(client, sent[1])
-	apply_msg(client, sent[2])
+	local client_pool = codec.create_pool()
+
+	apply_msg(client, sent[1], client_pool)
+	apply_msg(client, sent[2], client_pool)
 	assert(client.coins == 99)
 end
 
@@ -86,8 +92,10 @@ end
 function test.should_stop_sending_after_remove()
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
+
 	s.targets.p1 = world
 	sync.step(s)
+
 	sync.remove(s, 'p1')
 	world.coins = 99
 	sync.step(s)
@@ -123,9 +131,11 @@ end
 function test.should_emit_nothing_when_no_change()
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
+
 	s.targets.p1 = world
 	s.targets.p2 = world
 	sync.step(s)
+
 	local count = #sent
 	sync.step(s)
 	assert(#sent == count, 'no new messages without mutation')
