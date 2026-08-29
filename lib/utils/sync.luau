@@ -44,6 +44,14 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		return snapshot
 	end
 
+	local function ensurepool(target: Receiver)
+		if pools[target] then return pools[target] end
+		local pool = codec.create_pool()
+
+		pools[target] = pool
+		return pool
+	end
+
 	local function send_one(target: Receiver)
 		local curr = syncer.targets[target]
 		local prev = syncer.snapshots[target] or syncer.default
@@ -51,7 +59,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		local diff = diff_algo.from(prev, curr)
 		if diff_algo.is_empty(diff) then return end
 
-		local buf, unknowns = diff_codec.impl.encode(diff, pools[target])
+		local buf, unknowns = diff_codec.impl.encode(diff, ensurepool(target))
 		syncer.send(target, { buf = buf, unknowns = unknowns })
 
 		syncer.snapshots[target] = ensure_snapshot(curr)
