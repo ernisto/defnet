@@ -41,7 +41,9 @@ local val_to_id: { [any]: number } = {}
 local id_to_val: { [number]: any } = {}
 
 local function warn_not_available()
-	print(`unknown values not available, pls check the 2nd argument of 'decode' and 2nd return of 'encode'`)
+	print(
+		debug.traceback "unknown values not available, pls check the 2nd argument of 'decode' and 2nd return of 'encode'"
+	)
 end
 local function not_available_unknowns(): { any }
 	return setmetatable({}, { __index = warn_not_available }) :: any
@@ -71,12 +73,12 @@ local function load_workspace(input: buffer, input_unknowns: { any }?, pool: poo
 	cursor = 0
 end
 local function save_workspace(): (buffer, { any }?)
+	if fail then error 'some values couldnt be serialized' end
 	if current_pool then current_pool.next_id = next_identity end
 
 	local copy = buffer.create(cursor)
 	buffer.copy(copy, 0, working_buf, 0, cursor)
 
-	if fail then error 'some values couldnt be serialized' end
 	return copy, if #unknowns > 0 then unknowns else nil
 end
 local function reset_workspace()
