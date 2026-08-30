@@ -32,17 +32,7 @@ local function remove<Receiver>(syncer: syncer<Receiver>, target: Receiver)
 end
 
 local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
-	local snapshots: { [any]: any } = {}
 	local pools = syncer.pools
-
-	local function ensure_snapshot<T>(curr: T): T
-		local snapshot = snapshots[curr]
-		if snapshot then return snapshot end
-
-		snapshot = diff_algo.snapshot(curr)
-		snapshots[curr] = snapshot
-		return snapshot
-	end
 
 	local function ensurepool(target: Receiver)
 		if pools[target] then return pools[target] end
@@ -62,7 +52,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		local buf, unknowns = diff_codec.impl.encode(diff, ensurepool(target))
 		syncer.send(target, { buf = buf, unknowns = unknowns })
 
-		syncer.snapshots[target] = ensure_snapshot(curr)
+		syncer.snapshots[target] = diff_algo.snapshot(curr)
 	end
 
 	if target then

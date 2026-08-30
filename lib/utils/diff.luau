@@ -9,20 +9,26 @@ type diff_node = {
 }
 
 -- workspace
-local cache: { [any]: { [any]: diff_node } } = setmetatable({}, { __mode = 'k' }) :: any
+local diff_cache: { [any]: diff_node } = setmetatable({}, { __mode = 'k' }) :: any
+local snapshot_cache: { [any]: any } = setmetatable({}, { __mode = 'k' }) :: any
 
 -- helpers
 local function reset_cache()
-	table.clear(cache)
+	table.clear(diff_cache)
+	table.clear(snapshot_cache)
 end
 
 local function deep_clone(value: any): any
 	if type(value) ~= 'table' or table.isfrozen(value) then return value end
+	if snapshot_cache[value] then return snapshot_cache[value] end
+
 	local out = table.clone(value)
 
 	for key, sub in value do
 		out[key] = deep_clone(sub)
 	end
+
+	snapshot_cache[value] = out
 	return out
 end
 
@@ -43,24 +49,19 @@ local function is_array_index(key: any, max_len: number): boolean
 	return type(key) == 'number' and key % 1 == 0 and key >= 1 and key <= max_len
 end
 
-local function from<T>(prev: any, curr: any): diff_node?
-	prev = prev or {}
+local function from<T>(snapshot: any, curr: any): diff_node?
+	if snapshot == curr then return end
+
+	snapshot = snapshot or {}
 	curr = curr or {}
 
-	local by_curr = cache[prev]
-	if by_curr then
-		local hit = by_curr[curr]
-		if hit then return hit end
-	else
-		by_curr = {}
-		cache[prev] = by_curr
-	end
+	local d = diff_cache[curr]
+	if d then return d end
 
 	local node = unused_node or empty_node()
 	unused_node = nil
-	by_curr[curr] = node
 
-	local count_prev = #prev
+	local count_prev = #snapshot
 	local count_curr = #curr
 	local array_len = math.max(count_prev, count_curr)
 
@@ -74,7 +75,7 @@ local function from<T>(prev: any, curr: any): diff_node?
 			local sub: diff_node?
 
 			if index_curr >= 1 and index_prev >= 1 then
-				local prev_value = prev[index_prev]
+				local prev_value = snapshot[index_prev]
 				local curr_value = curr[index_curr]
 				if prev_value == curr_value then
 					matched = true
@@ -110,7 +111,7 @@ local function from<T>(prev: any, curr: any): diff_node?
 	for key, value in curr do
 		if is_array_index(key, array_len) then continue end
 
-		local prev_value = prev[key]
+		local prev_value = snapshot[key]
 		if prev_value == value then continue end
 
 		if type(prev_value) == 'table' and type(value) == 'table' then
@@ -119,7 +120,7 @@ local function from<T>(prev: any, curr: any): diff_node?
 			node.changes[key] = value
 		end
 	end
-	for key in prev do
+	for key in snapshot do
 		if is_array_index(key, array_len) then continue end
 
 		if curr[key] ~= nil then continue end
@@ -131,6 +132,7 @@ local function from<T>(prev: any, curr: any): diff_node?
 		return nil
 	end
 
+	diff_cache[curr] = node
 	return node
 end
 
