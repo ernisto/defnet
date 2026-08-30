@@ -27,14 +27,6 @@ local function count(map: { [any]: any }): number
 	return total
 end
 
-local function is_empty(node: any): boolean
-	return next(node.changes) == nil
-		and #node.removes == 0
-		and #node.shift_inserts == 0
-		and #node.shift_removes == 0
-		and next(node.children) == nil
-end
-
 local function roundtrip(prev: any, curr: any)
 	local node = diff.from(prev, curr)
 	local applied = diff.snapshot(prev)
@@ -86,29 +78,32 @@ end
 -- from: empty / equal
 function test.should_emit_empty_node_when_equal()
 	local node = diff.from({ a = 1, b = 2 }, { a = 1, b = 2 })
-	assert(is_empty(node), 'expected empty node')
+	assert(node == nil, 'expected empty node')
 end
 
 function test.should_emit_empty_node_for_two_empties()
 	local node = diff.from({}, {})
-	assert(is_empty(node))
+	assert(node == nil)
 end
 
 -- from: hash
 function test.should_emit_change_on_scalar_differ()
 	local node = diff.from({ a = 1 }, { a = 2 })
+	assert(node)
 	assert(count(node.changes) == 1)
 	assert(node.changes.a == 2)
 end
 
 function test.should_emit_change_on_new_key()
 	local node = diff.from({}, { coins = 10 })
+	assert(node)
 	assert(count(node.changes) == 1)
 	assert(node.changes.coins == 10)
 end
 
 function test.should_emit_remove_on_missing_key()
 	local node = diff.from({ a = 1, b = 2 }, { a = 1 })
+	assert(node)
 	assert(#node.removes == 1)
 	assert(node.removes[1] == 'b')
 end
@@ -116,6 +111,7 @@ end
 -- from: nested via children
 function test.should_recurse_via_children_on_nested_table()
 	local node = diff.from({ stats = { hp = 10, mp = 5 } }, { stats = { hp = 10, mp = 8 } })
+	assert(node)
 
 	local stats = node.children.stats
 	assert(stats, 'expected children.stats')
@@ -125,6 +121,7 @@ end
 
 function test.should_emit_nested_remove_via_children()
 	local node = diff.from({ inv = { sword = 1, shield = 1 } }, { inv = { sword = 1 } })
+	assert(node)
 
 	local inv = node.children.inv
 	assert(inv, 'expected children.inv')
@@ -134,18 +131,21 @@ end
 
 function test.should_skip_children_entry_when_subtree_equal()
 	local node = diff.from({ stats = { hp = 1 } }, { stats = { hp = 1 } })
-	assert(next(node.children) == nil, 'equal subtrees must not create child entries')
+	assert(node == nil, 'equal subtrees must not create child entries')
 end
 
 -- from: arrays
 function test.should_emit_change_for_same_length_array()
 	local node = diff.from({ 1, 2, 3 }, { 1, 9, 3 })
+	assert(node)
+
 	assert(count(node.changes) == 1)
 	assert(node.changes[2] == 9)
 end
 
 function test.should_recurse_into_array_element_via_children()
 	local node = diff.from({ { hp = 10 }, { hp = 20 } }, { { hp = 10 }, { hp = 30 } })
+	assert(node)
 
 	local element = node.children[2]
 	assert(element, 'expected children[2]')
@@ -155,12 +155,16 @@ end
 
 function test.should_emit_shift_insertion_middle()
 	local node = diff.from({ 'a', 'b', 'c' }, { 'a', 'x', 'b', 'c' })
+	assert(node)
+
 	assert(#node.shift_inserts == 1)
 	assert(node.shift_inserts[1].index == 2 and node.shift_inserts[1].value == 'x')
 end
 
 function test.should_emit_shift_insertion_end_in_ascending_order()
 	local node = diff.from({ 1, 2 }, { 1, 2, 3, 4 })
+	assert(node)
+
 	assert(#node.shift_inserts == 2)
 	assert(node.shift_inserts[1].index == 3 and node.shift_inserts[1].value == 3)
 	assert(node.shift_inserts[2].index == 4 and node.shift_inserts[2].value == 4)
@@ -168,6 +172,8 @@ end
 
 function test.should_emit_shift_removal_middle_in_descending_order()
 	local node = diff.from({ 'a', 'b', 'c', 'd' }, { 'a', 'd' })
+	assert(node)
+
 	assert(#node.shift_removes == 2)
 	assert(node.shift_removes[1] == 3)
 	assert(node.shift_removes[2] == 2)
@@ -175,6 +181,8 @@ end
 
 function test.should_emit_shift_removal_tail()
 	local node = diff.from({ 1, 2, 3 }, { 1 })
+	assert(node)
+
 	assert(#node.shift_removes == 2)
 	assert(node.shift_removes[1] == 3)
 	assert(node.shift_removes[2] == 2)

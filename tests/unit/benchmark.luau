@@ -73,11 +73,11 @@ local diff_small = {
 }
 
 local function make_diff_large(n: number)
-	local diff = diff_algo.from({}, {})
-	diff.changes.items = diff_algo.from({}, {})
+	local diff = diff_algo.empty()
+	diff.changes.items = diff_algo.empty()
 
 	for i = 1, n do
-		diff.children[i] = diff_algo.from({}, {})
+		diff.children[i] = diff_algo.empty()
 		diff.children[i].changes.count = i
 	end
 	return diff

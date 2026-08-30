@@ -25,6 +25,7 @@ local function deep_clone(value: any): any
 	return out
 end
 
+local unused_node: diff_node? -- sort of pooling
 local function empty_node(): diff_node
 	return { children = {}, shift_inserts = {}, shift_removes = {}, changes = {}, removes = {} }
 end
@@ -41,7 +42,7 @@ local function is_array_index(key: any, max_len: number): boolean
 	return type(key) == 'number' and key % 1 == 0 and key >= 1 and key <= max_len
 end
 
-local function from<T>(prev: any, curr: any): diff_node
+local function from<T>(prev: any, curr: any): diff_node?
 	prev = prev or {}
 	curr = curr or {}
 
@@ -54,8 +55,8 @@ local function from<T>(prev: any, curr: any): diff_node
 		cache[prev] = by_curr
 	end
 
-	local node = empty_node()
-	by_curr[curr] = node
+	local node = unused_node or empty_node()
+	unused_node = nil
 
 	local count_prev = #prev
 	local count_curr = #curr
@@ -77,7 +78,7 @@ local function from<T>(prev: any, curr: any): diff_node
 					matched = true
 				elseif type(prev_value) == 'table' and type(curr_value) == 'table' then
 					sub = from(prev_value, curr_value)
-					matched = is_empty(sub :: any)
+					matched = sub == nil
 				end
 			end
 
@@ -111,8 +112,7 @@ local function from<T>(prev: any, curr: any): diff_node
 		if prev_value == value then continue end
 
 		if type(prev_value) == 'table' and type(value) == 'table' then
-			local sub = from(prev_value, value)
-			if not is_empty(sub) then node.children[key] = sub end
+			node.children[key] = from(prev_value, value) :: any
 		else
 			node.changes[key] = value
 		end
@@ -124,10 +124,18 @@ local function from<T>(prev: any, curr: any): diff_node
 		table.insert(node.removes, key)
 	end
 
+	if is_empty(node) then
+		unused_node = node
+		return nil
+	end
+
+	by_curr[curr] = node
 	return node
 end
 
-local function apply(state: any, node: diff_node)
+local function apply(state: any, node: diff_node?)
+	if node == nil then return end
+
 	for index, value in node.changes do
 		state[index] = value
 	end
@@ -159,6 +167,7 @@ return table.freeze {
 	reset_cache = reset_cache,
 	snapshot = deep_clone,
 	is_empty = is_empty,
+	empty = empty_node,
 	apply = apply,
 	from = from,
 }
