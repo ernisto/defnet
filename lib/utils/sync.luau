@@ -57,7 +57,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 		local prev = syncer.snapshots[target] or syncer.default
 
 		local diff = diff_algo.from(prev, curr)
-		if diff_algo.is_empty(diff) then return end
+		if not diff then return end
 
 		local buf, unknowns = diff_codec.impl.encode(diff, ensurepool(target))
 		syncer.send(target, { buf = buf, unknowns = unknowns })
