@@ -141,6 +141,34 @@ function test.should_roundtrip_table_with_array_and_hash_parts()
 	assert(decoded.nested.name == 'nested')
 end
 
+function test.should_roundtrip_table_with_zero_index()
+	local input = { [0] = 'zero', [1] = 'one', [2] = 'two' }
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert(decoded[0] == 'zero')
+	assert(decoded[1] == 'one')
+	assert(decoded[2] == 'two')
+end
+
+function test.should_roundtrip_table_with_only_zero_index()
+	local input = { [0] = 'zero' }
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert(decoded[0] == 'zero')
+	assert(next(decoded, 0) == nil)
+end
+
+function test.should_roundtrip_mix_table_with_zero_index()
+	local input = { [0] = 'zero', [1] = 'cavalo', cavalo = 'esperto' }
+	local encoded, unknowns = encode(input)
+	local decoded = decode(encoded, unknowns)
+
+	assert(decoded[0] == 'zero')
+	assert(decoded.cavalo == 'esperto')
+end
+
 -- unknowns side-channel
 function test.should_roundtrip_unknown_values_with_unknown_list()
 	local unknown = coroutine.create(function() end)

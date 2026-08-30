@@ -26,9 +26,9 @@ export type codec_impl<Data> = {
 }
 
 -- workspace
--- based on global states for speed
--- not stables for concurrency work
--- but we arent doing it here anyway
+-- this weird design came from global states,
+-- making serde faster, but unstable for yielding
+-- hopefully we wont see it here anyway
 local limit = 1024 -- expandable
 local working_buf = buffer.create(limit)
 local unknowns: { any } = {}
@@ -302,7 +302,7 @@ local function push_identity(tab: table)
 end
 local function pop_identity(): table
 	local id = pop_size()
-	return id_to_val[id] or warn(`couldnt read pool id {id}`)
+	return id_to_val[id] or print(`couldnt read pool id {id}`)
 end
 
 local function push_value(value: any)
@@ -355,7 +355,7 @@ function push_tab(tab: table): ()
 	push_size(hash_len)
 
 	for k, v in tab do
-		if type(k) ~= 'number' or k > next then push_value(k) end
+		if type(k) ~= 'number' or k >= next or k <= 0 then push_value(k) end
 		push_value(v)
 	end
 end
@@ -370,7 +370,9 @@ function pop_tab(): table
 		out[i] = pop_value()
 	end
 	for i = 1, hash_len do
-		out[pop_value()] = pop_value()
+		local k = pop_value()
+		local v = pop_value()
+		if k then out[k] = v end
 	end
 	return out
 end
