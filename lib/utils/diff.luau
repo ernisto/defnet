@@ -17,8 +17,9 @@ local function reset_cache()
 end
 
 local function deep_clone(value: any): any
-	if type(value) ~= 'table' then return value end
-	local out = {}
+	if type(value) ~= 'table' or table.isfrozen(value) then return value end
+	local out = table.clone(value)
+
 	for key, sub in value do
 		out[key] = deep_clone(sub)
 	end
