@@ -6,7 +6,7 @@
 [tools]
 luau-lsp = "johnnymorganz/luau-lsp@1.68.1"
 stylua = "johnnymorganz/stylua@2.5.2"
-lutest = "lutest-dev/lutest@0.7.1"
+# lutest = "lutest-dev/lutest@0.7.1"
 wally = "upliftgames/wally@0.3.2"
 lute = "luau-lang/lute@1.0.0"
 rojo = "rojo-rbx/rojo@7.7.0"
