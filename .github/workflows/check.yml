@@ -57,4 +57,4 @@ jobs:
           token: ${{ github.token }}
 
       - name: Run tests
-        run: lute tests/unit/runner.luau
+        run: lute test tests/lute
