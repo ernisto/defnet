@@ -136,7 +136,9 @@ local function from<T>(snapshot: any, curr: any): diff_node?
 	return node
 end
 
-local function apply(state: any, node: diff_node)
+local function apply(state: any, node: diff_node?)
+	if node == nil then return end
+
 	for index, value in node.changes do
 		state[index] = value
 	end
@@ -168,6 +170,7 @@ return table.freeze {
 	reset_cache = reset_cache,
 	snapshot = deep_clone,
 	is_empty = is_empty,
+	empty = empty_node,
 	apply = apply,
 	from = from,
 }
