@@ -14,7 +14,7 @@ type remote_desc = {
 	rbxclass: string?,
 	codec: remote_index.codec_impl?,
 	wrap: (Instance, any) -> any,
-	single: boolean?,
+	unified: boolean?,
 }
 
 -- helpers
@@ -45,9 +45,11 @@ local function ensure_instance(parent: Instance, class: string, name: string)
 end
 
 -- functions
+local defnetroot = ensure_instance(if is_plugin then nil :: any else script, 'Folder', 'rbx')
+
 local function define_remotes<T>(remotes_def: T, root: Instance?): T
 	assert(type(remotes_def) == 'table', 'refine type')
-	local parent: Instance = root or ensure_instance(if is_plugin then nil :: any else script, 'Folder', 'rbx')
+	local parent: Instance = root or defnetroot
 
 	for name, desc in deterministic_iter<<remote_desc>>(remotes_def) do
 		if type(desc.rbxclass) ~= 'string' then
@@ -59,7 +61,7 @@ local function define_remotes<T>(remotes_def: T, root: Instance?): T
 		desc.id = remote_index.reserve_id(name)
 		local rbx = ensure_instance(parent, desc.rbxclass, name)
 
-		if desc.single then remote_index.ensure_single(parent) end
+		if desc.unified then remote_index.ensure_unified(defnetroot) end
 		if desc.codec then remote_index.set_codec(rbx, desc.codec) end
 
 		remotes_def[name] = desc.wrap(rbx, desc)

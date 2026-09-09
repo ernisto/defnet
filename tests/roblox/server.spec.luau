@@ -30,7 +30,7 @@ local function build()
 	return root, def
 end
 
-t.test('should_create_state_bindable_and_single_remote', function()
+t.test('should_create_state_bindable_and_unified_remote', function()
 	local root = Instance.new 'Folder'
 	lib.remotes({
 		world = lib.state { coins = 0 },
@@ -41,7 +41,7 @@ t.test('should_create_state_bindable_and_single_remote', function()
 	assert(#bindables == 1, 'state should own a BindableEvent')
 
 	local remotes = root:QueryDescendants '> RemoteEvent #__main__'
-	assert(#remotes == 1, 'state should share a single RemoteEvent')
+	assert(#remotes == 1, 'state should share a unified RemoteEvent')
 end)
 
 t.test('should_create_remote_event', function()

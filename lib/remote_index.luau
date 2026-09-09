@@ -11,7 +11,7 @@ local is_plugin = not RunService:IsRunning()
 local is_client = RunService:IsClient()
 local client_pool = codec.create_pool()
 
-local single_remote: RemoteEvent?
+local unified_remote: RemoteEvent?
 local codecs: { [Instance]: codec_impl } = {}
 
 local dispatchers: { [number]: dispatcher } = {}
@@ -29,6 +29,13 @@ local function get_name(id: number): string?
 	return names[id]
 end
 
+local function get_unified(): RemoteEvent?
+	return unified_remote
+end
+local function is_unified(rbx: Instance): boolean
+	return rbx == unified_remote
+end
+
 local function set_codec(rbx: Instance, impl: codec_impl)
 	codecs[rbx] = impl
 end
@@ -36,8 +43,8 @@ local function get_codec(rbx: Instance): codec_impl?
 	return codecs[rbx]
 end
 
-local function ensure_single(parent: Instance): RemoteEvent
-	if single_remote then return single_remote end
+local function ensure_unified(parent: Instance): RemoteEvent
+	if unified_remote then return unified_remote end
 
 	local remote: RemoteEvent
 	if is_client and not is_plugin then
@@ -47,7 +54,7 @@ local function ensure_single(parent: Instance): RemoteEvent
 		remote.Name = '__main__'
 		remote.Parent = parent
 	end
-	single_remote = remote
+	unified_remote = remote
 
 	if is_client then
 		remote.OnClientEvent:Connect(function(id: number, ...)
@@ -58,18 +65,11 @@ local function ensure_single(parent: Instance): RemoteEvent
 	return remote
 end
 
-local function get_single(): RemoteEvent?
-	return single_remote
-end
-local function is_single(rbx: Instance): boolean
-	return rbx == single_remote
-end
-
 local function on(id: number, fn: dispatcher)
 	dispatchers[id] = fn
 end
 local function fire(id: number, ...: any)
-	local remote = single_remote or error 'single remote not initialized'
+	local remote = unified_remote or error 'unified remote not initialized'
 	if is_client then
 		remote:FireServer(id, ...)
 	else
@@ -86,9 +86,10 @@ return table.freeze {
 	set_codec = set_codec,
 	get_codec = get_codec,
 
-	ensure_single = ensure_single,
-	get_single = get_single,
-	is_single = is_single,
+	ensure_unified = ensure_unified,
+	get_unified = get_unified,
+	is_unified = is_unified,
+
 	on = on,
 	fire = fire,
 
