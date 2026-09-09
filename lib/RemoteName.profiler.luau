@@ -15,9 +15,9 @@ return function(
 	if not args then args = player :: any end
 
 	local name, buf, unknowns
-	if remote_index.is_single(rbxevent) then
+	if remote_index.is_unified(rbxevent) then
 		local id = args[1] :: number
-		name = remote_index.get_name(id) or `single#{id}`
+		name = remote_index.get_name(id) or `unified#{id}`
 		buf, unknowns = args[2], args[3]
 	else
 		name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', '')

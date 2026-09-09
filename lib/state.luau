@@ -8,7 +8,7 @@ local remote_index = require './remote_index'
 local sync = require './utils/sync'
 
 -- defs
-export type remote_desc<T> = { rbxclass: 'RemoteEvent', default: T?, id: number, single: true }
+export type remote_desc<T> = { rbxclass: 'RemoteEvent', default: T?, id: number, unified: true }
 export type state_type<T> = {
 	changed: (() -> ()) -> (),
 	codec: codec.codec_impl<T>?,
@@ -54,7 +54,13 @@ local function wrap<T>(event: BindableEvent, desc: remote_desc<T>): state_type<T
 	return table.freeze { changed = listen_changed, step = step, server = syncer.targets } :: any
 end
 local function define<T>(default: T?): state_type<T>
-	return { rbxclass = 'BindableEvent', wrap = wrap, codec = diff_codec.impl, default = default, single = true } :: any
+	return {
+		rbxclass = 'BindableEvent',
+		wrap = wrap,
+		codec = diff_codec.impl,
+		default = default,
+		unified = true,
+	} :: any
 end
 
 -- functions
