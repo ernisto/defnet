@@ -1,8 +1,8 @@
+local test = require '@std/test'
+
 local codec = require '../../lib/utils/codec'
 local diff_codec = require '../../lib/utils/diff_codec'
 local sync = require '../../lib/utils/sync'
-
-local test = {}
 
 type msg = { target: string, buf: buffer, unknowns: { any }? }
 
@@ -22,7 +22,7 @@ local function apply_msg(state: any, m: msg, pool)
 	sync.apply(state, m.buf, pool, m.unknowns)
 end
 
-function test.should_step_only_specific_target()
+test.case('should_step_only_specific_target', function(t)
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
 
@@ -30,12 +30,12 @@ function test.should_step_only_specific_target()
 	s.targets.p2 = world
 	sync.step(s, 'p1')
 
-	assert(#sent == 1)
-	assert(sent[1].target == 'p1')
-end
+	t.eq(#sent, 1)
+	t.eq(sent[1].target, 'p1')
+end)
 
 -- receiver-side apply
-function test.should_roundtrip_full_state_through_apply()
+test.case('should_roundtrip_full_state_through_apply', function(t)
 	local schema = { coins = 0, items = {}, stats = { hp = 0 } }
 	local s, sent = make_syncer(schema)
 
@@ -44,13 +44,13 @@ function test.should_roundtrip_full_state_through_apply()
 
 	local client: any = {}
 	apply_msg(client, sent[1])
-	assert(client.coins == 50)
-	assert(client.stats.hp == 80)
-	assert(client.items[1] == 'a' and client.items[2] == 'b')
-end
+	t.eq(client.coins, 50)
+	t.eq(client.stats.hp, 80)
+	t.eq(client.items[1] == 'a' and client.items[2] == 'b', true)
+end)
 
 -- late join / catch-up
-function test.should_catch_up_new_joiner_via_targeted_step()
+test.case('should_catch_up_new_joiner_via_targeted_step', function(t)
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
 
@@ -60,17 +60,17 @@ function test.should_catch_up_new_joiner_via_targeted_step()
 	s.targets.p2 = world
 	sync.step(s, 'p2')
 
-	assert(#sent == 2, 'p1 first tick + p2 catch-up')
-	assert(sent[1].target == 'p1')
-	assert(sent[2].target == 'p2')
+	t.eq(#sent, 2, 'p1 first tick + p2 catch-up')
+	t.eq(sent[1].target, 'p1')
+	t.eq(sent[2].target, 'p2')
 
 	local p2_state: any = {}
 	apply_msg(p2_state, sent[2])
-	assert(p2_state.coins == 10, 'p2 caught up to current state')
-end
+	t.eq(p2_state.coins, 10, 'p2 caught up to current state')
+end)
 
 -- target switches reference
-function test.should_send_resync_when_target_switches_curr()
+test.case('should_send_resync_when_target_switches_curr', function(t)
 	local s, sent = make_syncer { coins = 0 }
 
 	s.targets.p1 = { coins = 1 }
@@ -79,17 +79,17 @@ function test.should_send_resync_when_target_switches_curr()
 	s.targets.p1 = { coins = 99 }
 	sync.step(s)
 
-	assert(#sent == 2)
+	t.eq(#sent, 2)
 	local client: any = {}
 	local client_pool = codec.create_pool()
 
 	apply_msg(client, sent[1], client_pool)
 	apply_msg(client, sent[2], client_pool)
-	assert(client.coins == 99)
-end
+	t.eq(client.coins, 99)
+end)
 
 -- cleanup / no-op edges
-function test.should_stop_sending_after_remove()
+test.case('should_stop_sending_after_remove', function(t)
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
 
@@ -100,35 +100,35 @@ function test.should_stop_sending_after_remove()
 	world.coins = 99
 	sync.step(s)
 
-	assert(#sent == 1, 'no messages after remove')
-	assert(s.snapshots.p1 == nil)
-end
+	t.eq(#sent, 1, 'no messages after remove')
+	t.eq(s.snapshots.p1, nil)
+end)
 
 -- diff against default
-function test.should_send_only_changed_field_against_default_for_new_target()
+test.case('should_send_only_changed_field_against_default_for_new_target', function(t)
 	local s, sent = make_syncer { persistent = 0, mutable = 0 }
 	local world = { persistent = 0, mutable = 100 }
 	s.targets.p1 = world
 	sync.step(s)
 
-	assert(#sent == 1)
+	t.eq(#sent, 1)
 	local d = diff_codec.impl.decode(sent[1].buf, nil, sent[1].unknowns)
-	assert(#d.removes == 0 and #d.shift_inserts == 0 and #d.shift_removes == 0)
-	assert(next(d.children) == nil, 'expected no nested children')
+	t.eq(#d.removes == 0 and #d.shift_inserts == 0 and #d.shift_removes == 0, true)
+	t.eq(next(d.children), nil, 'expected no nested children')
 
 	local changes_count = 0
 	for _ in d.changes do
 		changes_count += 1
 	end
-	assert(changes_count == 1, `expected 1 change, got {changes_count}`)
-	assert(d.changes.mutable == 100, `expected mutable=100, got {d.changes.mutable}`)
+	t.eq(changes_count, 1, `expected 1 change, got {changes_count}`)
+	t.eq(d.changes.mutable, 100, `expected mutable=100, got {d.changes.mutable}`)
 
 	local client: any = { persistent = 0, mutable = 0 }
 	apply_msg(client, sent[1])
-	assert(client.persistent == 0 and client.mutable == 100)
-end
+	t.eq(client.persistent == 0 and client.mutable == 100, true)
+end)
 
-function test.should_emit_nothing_when_no_change()
+test.case('should_emit_nothing_when_no_change', function(t)
 	local s, sent = make_syncer { coins = 0 }
 	local world = { coins = 10 }
 
@@ -138,7 +138,5 @@ function test.should_emit_nothing_when_no_change()
 
 	local count = #sent
 	sync.step(s)
-	assert(#sent == count, 'no new messages without mutation')
-end
-
-return test
+	t.eq(#sent, count, 'no new messages without mutation')
+end)
