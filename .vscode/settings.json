@@ -4,11 +4,7 @@
   "files.eol": "\n",
   "files.exclude": {
     "**/.luaurc": true,
-    "**/*-lock.*": true,
-    "**/*.lock.*": true,
-    "**/*.lock": true,
-    "**/.pesde": true,
-    "**/*_packages": true,
+    "*-state.yml": true,
     ".gitattributes": true,
     ".gitignore": true,
     ".github": true,
@@ -16,10 +12,8 @@
     ".vscode": true,
     ".env": true,
     ".zed": true,
-    "*-state.yml": true,
     "default.project.json": true,
     "sourcemap.json": true,
-    "lutest.toml": true,
     "stylua.toml": true,
     "aftman.toml": true,
     "wally.toml": true,
@@ -28,17 +22,8 @@
   },
   "files.readonlyInclude": {
     "**/LICENSE": true,
-    "**/*-lock.*": true,
-    "**/*.lock.*": true,
-    "**/*.lock": true,
-    "**/.pesde/**": true,
-    "**/*_packages/**": true,
     "sourcemap.json": true
   },
-  "luau-lsp.ignoreGlobs": [
-    "**/*_packages/**",
-    "**/.pesde/**"
-  ],
   "luau-lsp.platform.type": "roblox",
   "luau-lsp.fflags.enableNewSolver": false,
   "luau-lsp.bytecode.vectorCtor": "new",
@@ -46,9 +31,6 @@
   "luau-lsp.bytecode.vectorType": "Vector3",
   "luau-lsp.completion.imports.requireStyle": "alwaysRelative",
   "luau-lsp.completion.imports.stringRequires.enabled": true,
-  "luau-lsp.completion.imports.ignoreGlobs": [
-    "**/.pesde/**"
-  ],
   "luau-lsp.sourcemap.rojoProjectFile": "dev.project.json",
   "luau-lsp.types.robloxSecurityLevel": "LocalUserSecurity",
   "luau-lsp.types.definitionFiles": {

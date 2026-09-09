@@ -46,7 +46,6 @@ jobs:
           --sourcemap sourcemap.json
           --defs dist/roblox.d.luau
           --defs dist/vector.d.luau
-          --ignore **/*_packages/**
           lib tests
 
   automated-tests:
@@ -58,4 +57,4 @@ jobs:
           token: ${{ github.token }}
 
       - name: Run tests
-        run: lute tests/unit/runner.luau
+        run: lute test tests/lute
