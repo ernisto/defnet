@@ -5,14 +5,14 @@ type request_info = { { Name: string, Data: { any } } }
 
 -- module
 return function(
-	rbxevent: UnreliableRemoteEvent | RemoteEvent | RemoteFunction,
+	rbxevent: UnreliableRemoteEvent | RemoteEvent | RemoteFunction | BindableEvent,
 	player: Player,
 	args: { any }
 ): request_info?
-	local codec = remote_index.get_codec(rbxevent)
-	if not codec then return end
-
 	if not args then args = player :: any end
+
+	local codec = remote_index.get_codec(rbxevent, args)
+	if not codec then return end
 
 	local name, buf, unknowns
 	if remote_index.is_unified(rbxevent) then
@@ -27,7 +27,7 @@ return function(
 	return {
 		{
 			Name = name,
-			Data = { codec.decode(buf, remote_index.client_pool, unknowns) },
+			Data = { codec.decode(buf, table.clone(remote_index.client_pool), unknowns) },
 		},
 	}
 end

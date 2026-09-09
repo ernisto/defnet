@@ -1,6 +1,7 @@
 local RunService = game:GetService 'RunService'
 
 local codec = require './utils/codec'
+local diff_codec = require './utils/diff_codec'
 
 -- defs
 export type codec_impl = codec.codec_impl<any>
@@ -39,8 +40,9 @@ end
 local function set_codec(rbx: Instance, impl: codec_impl)
 	codecs[rbx] = impl
 end
-local function get_codec(rbx: Instance): codec_impl?
-	return codecs[rbx]
+local function get_codec(rbx: Instance, args): codec_impl?
+	-- TODO: support unified events with custom codec
+	return if is_unified(rbx) then diff_codec.impl else codecs[rbx]
 end
 
 local function ensure_unified(parent: Instance): RemoteEvent
