@@ -3,6 +3,7 @@ local RunService = game:GetService 'RunService'
 local clock = require './clock'
 local codec = require './utils/codec'
 local diff_codec = require './utils/diff_codec'
+local pool = require './utils/pool'
 
 -- defs
 export type codec_impl = codec.codec_impl<any>
@@ -11,7 +12,7 @@ type dispatcher = (...any) -> ()
 -- vars
 local is_plugin = not RunService:IsRunning()
 local is_client = RunService:IsClient()
-local client_pool = codec.create_pool()
+local client_pool = pool.create()
 
 local unified_remote: RemoteEvent?
 local codecs: { [Instance]: codec_impl } = {}

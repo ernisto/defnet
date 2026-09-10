@@ -1,6 +1,7 @@
 --!native
 
 local codec = require './codec'
+local pool = require './pool'
 local push_value = codec.push_value
 local push_size = codec.push_varint
 local pop_value = codec.pop_value
@@ -161,21 +162,23 @@ local function pop_diff(): diff_node
 end
 
 -- impl
-local function encode(diff: diff_node, pool: codec.pool?): (buffer, { any }?)
-	codec.reset_workspace()
-	codec.load_pool(pool)
+local function encode(diff: diff_node, output_pool: pool.pool?): (buffer, { any }?)
+	local unknowns = {}
+	codec.load_workspace(output_pool, unknowns)
 	reset_nodes()
+
 	push_diff(diff)
 	reset_nodes()
-	return codec.save_workspace()
+	return codec.save_buffer(), if #unknowns > 0 then unknowns else nil
 end
 
-local function decode(input: buffer, pool: codec.pool?, input_unknowns: { any }?): diff_node
-	codec.load_workspace(input, input_unknowns, pool)
+local function decode(input: buffer, input_pool: pool.pool?, input_unknowns: { any }?): diff_node
+	codec.load_workspace(input_pool, input_unknowns)
+	codec.load_buffer(input)
 	reset_nodes()
+
 	local diff = pop_diff()
 	reset_nodes()
-	codec.save_pool()
 	return diff
 end
 

@@ -4,17 +4,10 @@ local codec = require '../../lib/utils/codec'
 
 -- helpers
 local function encode(v)
-	codec.reset_workspace()
-	codec.load_pool()
-	codec.push_value(v)
-	return codec.save_workspace()
+	return codec.impl.encode(v)
 end
 local function decode(buff, unk)
-	codec.load_workspace(buff, unk)
-	local out = codec.pop_value()
-
-	codec.save_pool()
-	return out
+	return codec.impl.decode(buff, nil, unk)
 end
 
 local function assert_buffer_equal(t, a: buffer, b: buffer)
@@ -176,7 +169,7 @@ test.case('should_track_unknown_values_once', function(t)
 	local _, unknowns = encode(input)
 
 	t.eq(unknowns and #unknowns, 1)
-	t.eq(unknowns[1], unknown)
+	t.eq(unknowns and unknowns[1], unknown)
 end)
 
 test.case('should_preserve_identity_of_duplicated_table_values', function(t)
@@ -204,11 +197,12 @@ test.case('should_roundtrip_varint_boundaries', function(t)
 		268435455, -- 4 byte max (2^28 - 1)
 	}
 	for _, n in cases do
-		codec.reset_workspace()
+		codec.load_workspace()
 		codec.push_varint(n)
-		local encoded = codec.save_workspace()
+		local encoded = codec.save_buffer()
 
-		codec.load_workspace(encoded)
+		codec.load_workspace()
+		codec.load_buffer(encoded)
 		t.eq(codec.pop_varint(), n, `varint roundtrip failed for {n}`)
 	end
 end)
@@ -224,9 +218,9 @@ test.case('should_use_expected_byte_count_for_varints', function(t)
 		{ value = 2097152, bytes = 4 },
 	}
 	for _, case in cases do
-		codec.reset_workspace()
+		codec.load_workspace()
 		codec.push_varint(case.value)
-		local encoded = codec.save_workspace()
+		local encoded = codec.save_buffer()
 
 		t.eq(buffer.len(encoded), case.bytes, `varint {case.value} expected {case.bytes} bytes`)
 	end

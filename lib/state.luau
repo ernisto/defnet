@@ -5,6 +5,7 @@ local clock = require './clock'
 local codec = require './utils/codec'
 local diff = require './utils/diff'
 local diff_codec = require './utils/diff_codec'
+local pool = require './utils/pool'
 local prediction = require './utils/prediction'
 local remote_index = require './remote_index'
 local sync = require './utils/sync'
@@ -25,7 +26,7 @@ export type state_type<T> = {
 
 -- vars
 local is_client = RunService:IsClient()
-local server_pools: { [Player]: codec.pool } = {}
+local server_pools: { [Player]: pool.pool } = {}
 local registry: { sync.syncer<Player> } = {}
 local next_op_id = 0
 

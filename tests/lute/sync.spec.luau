@@ -1,7 +1,7 @@
 local test = require '@std/test'
 
-local codec = require '../../lib/utils/codec'
 local diff_codec = require '../../lib/utils/diff_codec'
+local pool = require '../../lib/utils/pool'
 local sync = require '../../lib/utils/sync'
 
 type msg = { target: string, buf: buffer, unknowns: { any }? }
@@ -81,7 +81,7 @@ test.case('should_send_resync_when_target_switches_curr', function(t)
 
 	t.eq(#sent, 2)
 	local client: any = {}
-	local client_pool = codec.create_pool()
+	local client_pool = pool.create()
 
 	apply_msg(client, sent[1], client_pool)
 	apply_msg(client, sent[2], client_pool)

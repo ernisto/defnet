@@ -1,5 +1,8 @@
 --!native
 
+local pool = require './pool'
+type pool = pool.pool
+
 local WORST_MISSING_BYTES_CASE = 3 -- check `peek_u32` hack comment
 
 -- defs
@@ -12,14 +15,10 @@ local type_to_tags = {
 	['vector'] = 6,
 	['table'] = 7,
 	['buffer'] = 8,
+	-- pooled = 9
 }
 
 type table = { [any]: any }
-export type pool = {
-	val_to_id: { [any]: number },
-	id_to_val: { [number]: any },
-	next_id: number,
-}
 export type codec_impl<Data> = {
 	encode: (Data, pool?) -> (buffer, { any }?),
 	decode: (buffer, pool?, { any }?) -> Data,
@@ -32,13 +31,9 @@ export type codec_impl<Data> = {
 local limit = 1024 -- expandable
 local working_buf = buffer.create(limit)
 local unknowns: { any } = {}
+local current_pool: pool
 local cursor = 0
 local fail = false
-
-local current_pool: pool?
-local next_identity = 1
-local val_to_id: { [any]: number } = {}
-local id_to_val: { [number]: any } = {}
 
 local function warn_not_available()
 	print(
@@ -49,42 +44,25 @@ local function not_available_unknowns(): { any }
 	return setmetatable({}, { __index = warn_not_available }) :: any
 end
 
-local function create_pool(): pool
-	return { val_to_id = {}, id_to_val = {}, next_id = 1 }
-end
-local function load_pool(pool: pool?)
-	current_pool = pool
-	val_to_id = if pool then pool.val_to_id else {}
-	id_to_val = if pool then pool.id_to_val else {}
-	next_identity = if pool then pool.next_id else 1
-end
-local function save_pool()
-	if current_pool then current_pool.next_id = next_identity end
-end
-
-local function load_workspace(input: buffer, input_unknowns: { any }?, pool: pool?)
-	local input_len = buffer.len(input) + WORST_MISSING_BYTES_CASE
-	working_buf = if input_len < limit then working_buf else buffer.create(input_len)
-
-	buffer.copy(working_buf, 0, input)
-	load_pool(pool)
-
-	unknowns = input_unknowns or not_available_unknowns()
+local function load_workspace(input_pool: pool?, mut_unknowns: { any }?)
+	current_pool = if input_pool then input_pool else pool.create()
+	unknowns = mut_unknowns or not_available_unknowns()
 	cursor = 0
+	fail = false
 end
-local function save_workspace(): (buffer, { any }?)
+local function load_buffer(input: buffer)
+	local input_len = buffer.len(input) + WORST_MISSING_BYTES_CASE
+
+	working_buf = if input_len < limit then working_buf else buffer.create(input_len)
+	buffer.copy(working_buf, 0, input)
+end
+local function save_buffer(): buffer
 	if fail then error 'some values couldnt be serialized' end
-	if current_pool then current_pool.next_id = next_identity end
 
 	local copy = buffer.create(cursor)
 	buffer.copy(copy, 0, working_buf, 0, cursor)
 
-	return copy, if #unknowns > 0 then unknowns else nil
-end
-local function reset_workspace()
-	cursor = 0
-	fail = false
-	unknowns = {}
+	return copy
 end
 
 local function realloc()
@@ -113,20 +91,12 @@ local function peek_u32(): number
 	return buffer.readu32(working_buf, cursor)
 end
 
+-- pool
 local function get_identity(value: any): number?
-	return val_to_id[value]
+	return current_pool.val_to_id[value]
 end
-local function register_push_identity(value: any): number
-	local id = next_identity
-	val_to_id[value] = id
-	next_identity += 1
-	return id
-end
-local function register_pop_identity(value: any): number
-	local id = next_identity
-	id_to_val[id] = value
-	next_identity += 1
-	return id
+local function register_identity(value: any): number
+	return pool.add_value(current_pool, value)
 end
 
 -- primitives
@@ -153,8 +123,8 @@ local function pop_u32(): number
 	return buffer.readu32(working_buf, advance(4))
 end
 
--- unrolled varint up to u32 implementation for speed
 local function push_varint(num: number)
+	-- unrolled varint up to u32 implementation for speed
 	if num < 0x80 then
 		push_u8(num)
 	elseif num < 0x4000 then
@@ -210,18 +180,16 @@ local push_size, pop_size = push_varint, pop_varint
 local push_tab, pop_tab
 
 local function push_unknown(value: any)
-	register_push_identity(value)
+	local index = #unknowns + 1
+	unknowns[index] = value
 
-	local existing_index = table.find(unknowns, value)
-	local index = existing_index or #unknowns + 1
-
-	if existing_index == nil then unknowns[index] = value end
+	pool.add_value(current_pool, value)
 	push_size(index)
 end
 local function pop_unknown(): any
 	local value = unknowns[pop_size()]
 
-	register_pop_identity(value)
+	pool.add_value(current_pool, value)
 	return value
 end
 
@@ -249,30 +217,31 @@ local function pop_num(): number
 end
 
 local function push_str(str: string)
-	register_push_identity(str)
+	pool.add_value(current_pool, str)
 
 	local len = string.len(str)
 	push_size(len)
 
 	local offset = ensure_size(len)
-	buffer.writestring(working_buf, offset, str)
 	fail = fail or utf8.len(str) ~= len
+
+	buffer.writestring(working_buf, offset, str)
 end
 local function pop_str(): string
 	local len = pop_size()
 	local str = buffer.readstring(working_buf, advance(len), len)
 
-	register_pop_identity(str)
+	pool.add_value(current_pool, str)
 	return str
 end
 
 local function push_vec(vec: vector)
 	local offset = ensure_size(3 * 32 / 8)
+	fail = fail or math.isnan(vec.X + vec.Y + vec.Z)
 
 	buffer.writef32(working_buf, offset + 0, vec.X)
 	buffer.writef32(working_buf, offset + 4, vec.Y)
 	buffer.writef32(working_buf, offset + 8, vec.Z)
-	fail = fail or math.isnan(vec.X + vec.Y + vec.Z)
 end
 local function pop_vec(): vector
 	return vector.create(
@@ -297,17 +266,17 @@ local function pop_buf(): buffer
 	return output_buf
 end
 
-local function push_identity(tab: table)
-	push_size(val_to_id[tab])
+local function push_pooled(tab: table)
+	push_size(current_pool.val_to_id[tab])
 end
-local function pop_identity(): table
+local function pop_pooled(): table
 	local id = pop_size()
-	return id_to_val[id] or print(`couldnt read pool id {id}`)
+	return current_pool.id_to_val[id] or print(`couldnt read pool id {id}`)
 end
 
 local function push_value(value: any)
 	local type = type(value)
-	local tag = if val_to_id[value] then 9 else type_to_tags[type] or 1
+	local tag = if current_pool.val_to_id[value] then 9 else type_to_tags[type] or 1
 
 	push_u8(tag)
 	return if tag == 1
@@ -319,7 +288,7 @@ local function push_value(value: any)
 		elseif tag == 6 then push_vec(value)
 		elseif tag == 7 then push_tab(value)
 		elseif tag == 8 then push_buf(value)
-		else push_identity(value)
+		else push_pooled(value)
 end
 local function pop_value(): any
 	local tag = pop_u8()
@@ -332,11 +301,11 @@ local function pop_value(): any
 		elseif tag == 6 then pop_vec()
 		elseif tag == 7 then pop_tab()
 		elseif tag == 8 then pop_buf()
-		else pop_identity()
+		else pop_pooled()
 end
 
 function push_tab(tab: table): ()
-	register_push_identity(tab)
+	pool.add_value(current_pool, tab)
 
 	local hash_len = 0
 	local seq_len = 0
@@ -364,7 +333,7 @@ function pop_tab(): table
 	local hash_len = pop_size()
 
 	local out = table.create(arr_len)
-	register_pop_identity(out)
+	pool.add_value(current_pool, out)
 
 	for i = 1, arr_len do
 		out[i] = pop_value()
@@ -378,33 +347,28 @@ function pop_tab(): table
 end
 
 -- module
-local function encode(value: any, pool: pool?): (buffer, { any }?)
-	reset_workspace()
-	load_pool(pool)
+local function encode(value: any, output_pool: pool?): (buffer, { any }?)
+	local unknowns = {}
+	load_workspace(output_pool, unknowns)
 
 	push_value(value)
-	return save_workspace()
+	return save_buffer(), if #unknowns > 0 then unknowns else nil
 end
-local function decode(input: buffer, pool: pool?, input_unknowns: { any }?): any
-	load_workspace(input, input_unknowns, pool)
-	local value = pop_value()
-
-	save_pool()
-	return value
+local function decode(input: buffer, input_pool: pool?, input_unknowns: { any }?): any
+	load_workspace(input_pool, input_unknowns)
+	load_buffer(input)
+	return pop_value()
 end
 
 -- module
 return table.freeze {
 	-- user api
 	impl = { encode = encode, decode = decode },
-	create_pool = create_pool,
 
 	-- internal workspace
-	reset_workspace = reset_workspace,
-	save_workspace = save_workspace,
 	load_workspace = load_workspace,
-	save_pool = save_pool,
-	load_pool = load_pool,
+	load_buffer = load_buffer,
+	save_buffer = save_buffer,
 
 	-- internal datatypes
 	push_u8 = push_u8,
@@ -412,17 +376,17 @@ return table.freeze {
 	push_u32 = push_u32,
 	push_value = push_value,
 	push_varint = push_varint,
-	push_identity = push_identity,
+	push_pooled = push_pooled,
 
 	pop_u8 = pop_u8,
 	pop_u16 = pop_u16,
 	pop_u32 = pop_u32,
 	pop_value = pop_value,
 	pop_varint = pop_varint,
-	pop_identity = pop_identity,
+	pop_pooled = pop_pooled,
 
-	-- identity pool
+	-- pool
 	get_identity = get_identity,
-	register_push_identity = register_push_identity,
-	register_pop_identity = register_pop_identity,
+	register_pop_identity = register_identity,
+	register_push_identity = register_identity,
 }

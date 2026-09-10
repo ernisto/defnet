@@ -1,6 +1,7 @@
 local test = require '@std/test'
 
 local diff_codec = require '../../lib/utils/diff_codec'
+local pool = require '../../lib/utils/pool'
 
 -- helpers
 local function empty_node(): any
@@ -166,11 +167,12 @@ test.case('should_track_unknowns_in_change_value', function(t)
 	local node = empty_node()
 	node.changes.ref = thread
 
-	local buf, unknowns = diff_codec.impl.encode(node)
+	local p = pool.create()
+	local buf, unknowns = diff_codec.impl.encode(node, p)
 	t.eq(unknowns and #unknowns, 1)
-	t.eq(unknowns[1], thread)
+	t.eq(unknowns and unknowns[1], thread)
 
-	t.eq(diff_codec.impl.decode(buf, nil, unknowns).changes.ref, thread)
+	t.eq(diff_codec.impl.decode(buf, p, unknowns).changes.ref, thread)
 end)
 
 -- identity dedup (cache reuse)
@@ -193,7 +195,7 @@ test.case('should_handle_self_referential_node', function(t)
 	node.children.self = node
 
 	local decoded = roundtrip(node)
-	t.eq(decoded.children.self, decoded, 'self-ref must roundtrip as same instance')
+	assert(decoded.children.self == decoded, 'self-ref must roundtrip as same instance')
 end)
 
 test.case('should_handle_mutually_recursive_nodes', function(t)
@@ -203,7 +205,7 @@ test.case('should_handle_mutually_recursive_nodes', function(t)
 	b.children.a = a
 
 	local decoded = roundtrip(a)
-	t.eq(decoded.children.b.children.a, decoded)
+	assert(decoded.children.b.children.a == decoded)
 end)
 
 -- bitmask sparseness — partial fields skip absent ones

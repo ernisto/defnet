@@ -2,12 +2,13 @@ local test = require '@std/test'
 
 local codec = require '../../lib/utils/codec'
 local diff_codec = require '../../lib/utils/diff_codec'
+local pool = require '../../lib/utils/pool'
 local sync = require '../../lib/utils/sync'
 
 -- helpers
 type msg = { target: string, buf: buffer, unknowns: { any }? }
 
-local function make_syncer_with_pools(schema: any?, pools: { [string]: codec.pool }): (sync.syncer<string>, { msg })
+local function make_syncer_with_pools(schema: any?, pools: { [string]: pool.pool }): (sync.syncer<string>, { msg })
 	local sent: { msg } = {}
 	local s = sync.create {
 		default = schema,
@@ -21,7 +22,7 @@ end
 
 -- pool factory
 test.case('should_create_pool_with_empty_maps', function(t)
-	local pool = codec.create_pool()
+	local pool = pool.create()
 
 	t.eq(next(pool.val_to_id), nil)
 	t.eq(next(pool.id_to_val), nil)
@@ -30,8 +31,8 @@ end)
 
 -- codec encode/decode with pool dedup across calls
 test.case('should_dedup_string_across_encode_calls_with_same_pool', function(t)
-	local pool_enc = codec.create_pool()
-	local pool_dec = codec.create_pool()
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
 
 	local buf1, unk1 = codec.impl.encode('hello', pool_enc)
 	local buf2, unk2 = codec.impl.encode('hello', pool_enc)
@@ -43,8 +44,8 @@ test.case('should_dedup_string_across_encode_calls_with_same_pool', function(t)
 end)
 
 test.case('should_dedup_table_across_encode_calls_with_same_pool', function(t)
-	local pool_enc = codec.create_pool()
-	local pool_dec = codec.create_pool()
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
 
 	local shared = { x = 1, y = 2 }
 	local buf1 = codec.impl.encode(shared, pool_enc)
@@ -60,7 +61,7 @@ test.case('should_dedup_table_across_encode_calls_with_same_pool', function(t)
 end)
 
 test.case('should_grow_pool_next_id_across_encodes', function(t)
-	local pool = codec.create_pool()
+	local pool = pool.create()
 	codec.impl.encode('a', pool)
 	local first = pool.next_id
 
@@ -69,8 +70,8 @@ test.case('should_grow_pool_next_id_across_encodes', function(t)
 end)
 
 test.case('should_grow_pool_next_id_across_decodes', function(t)
-	local pool_enc = codec.create_pool()
-	local pool_dec = codec.create_pool()
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
 
 	local b1 = codec.impl.encode('a', pool_enc)
 	codec.impl.decode(b1, pool_dec)
@@ -82,7 +83,7 @@ test.case('should_grow_pool_next_id_across_decodes', function(t)
 end)
 
 test.case('should_keep_pool_independent_when_not_passed', function(t)
-	local pool = codec.create_pool()
+	local pool = pool.create()
 	codec.impl.encode('hello', pool)
 	local before = pool.next_id
 
@@ -91,8 +92,8 @@ test.case('should_keep_pool_independent_when_not_passed', function(t)
 end)
 
 test.case('should_isolate_distinct_pools', function(t)
-	local pool_a = codec.create_pool()
-	local pool_b = codec.create_pool()
+	local pool_a = pool.create()
+	local pool_b = pool.create()
 
 	codec.impl.encode('hello', pool_a)
 	t.eq(pool_b.next_id, 1, 'pool_b untouched')
@@ -101,8 +102,8 @@ test.case('should_isolate_distinct_pools', function(t)
 end)
 
 test.case('should_roundtrip_recursive_table_with_pool', function(t)
-	local pool_enc = codec.create_pool()
-	local pool_dec = codec.create_pool()
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
 
 	local input = {}
 	input.self = input
@@ -114,8 +115,8 @@ end)
 
 -- diff_codec with pool
 test.case('should_roundtrip_diff_with_pool', function(t)
-	local pool_enc = codec.create_pool()
-	local pool_dec = codec.create_pool()
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
 
 	local node: any = { children = {}, shift_inserts = {}, shift_removes = {}, changes = { coins = 50 }, removes = {} }
 
@@ -124,7 +125,7 @@ test.case('should_roundtrip_diff_with_pool', function(t)
 end)
 
 test.case('should_dedup_repeated_diff_payload_via_pool', function(t)
-	local pool_enc = codec.create_pool()
+	local pool_enc = pool.create()
 
 	local node1: any =
 		{ children = {}, shift_inserts = {}, shift_removes = {}, changes = { name = 'alice' }, removes = {} }
@@ -138,7 +139,7 @@ end)
 
 -- sync with pools map
 test.case('should_use_per_target_pool_in_sync', function(t)
-	local pools: { [string]: codec.pool } = { p1 = codec.create_pool() }
+	local pools: { [string]: pool.pool } = { p1 = pool.create() }
 	local s, sent = make_syncer_with_pools({ coins = 0 }, pools)
 	local world = { coins = 10 }
 	s.targets.p1 = world
@@ -149,7 +150,7 @@ test.case('should_use_per_target_pool_in_sync', function(t)
 end)
 
 test.case('should_share_pool_across_multiple_states_for_same_target', function(t)
-	local pools: { [string]: codec.pool } = { p1 = codec.create_pool() }
+	local pools: { [string]: pool.pool } = { p1 = pool.create() }
 	local s_a, _ = make_syncer_with_pools({ name = '' }, pools)
 	local s_b, _ = make_syncer_with_pools({ label = '' }, pools)
 
@@ -165,7 +166,7 @@ test.case('should_share_pool_across_multiple_states_for_same_target', function(t
 end)
 
 test.case('should_emit_smaller_packet_on_repeated_string_with_persistent_pool', function(t)
-	local pools: { [string]: codec.pool } = { p1 = codec.create_pool() }
+	local pools: { [string]: pool.pool } = { p1 = pool.create() }
 	local s, sent = make_syncer_with_pools({ name = '' }, pools)
 	local world = { name = 'long_unique_name_alpha' }
 	s.targets.p1 = world
@@ -182,8 +183,8 @@ test.case('should_emit_smaller_packet_on_repeated_string_with_persistent_pool', 
 end)
 
 test.case('should_roundtrip_through_paired_sync_pools', function(t)
-	local server_pools: { [string]: codec.pool } = { p1 = codec.create_pool() }
-	local client_pool = codec.create_pool()
+	local server_pools: { [string]: pool.pool } = { p1 = pool.create() }
+	local client_pool = pool.create()
 
 	local s, sent = make_syncer_with_pools({ items = {} }, server_pools)
 	local world = { items = { 'sword', 'shield' } }
@@ -201,9 +202,9 @@ test.case('should_roundtrip_through_paired_sync_pools', function(t)
 end)
 
 test.case('should_isolate_pools_per_target', function(t)
-	local pools: { [string]: codec.pool } = {
-		p1 = codec.create_pool(),
-		p2 = codec.create_pool(),
+	local pools: { [string]: pool.pool } = {
+		p1 = pool.create(),
+		p2 = pool.create(),
 	}
 	local s, _ = make_syncer_with_pools({ name = '' }, pools)
 

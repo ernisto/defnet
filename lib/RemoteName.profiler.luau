@@ -1,3 +1,4 @@
+local pool = require './utils/pool'
 local remote_index = require './remote_index'
 
 -- defs
@@ -27,7 +28,7 @@ return function(
 	return {
 		{
 			Name = name,
-			Data = { codec.decode(buf, table.clone(remote_index.client_pool), unknowns) },
+			Data = { codec.decode(buf, pool.fork(remote_index.client_pool), unknowns) },
 		},
 	}
 end

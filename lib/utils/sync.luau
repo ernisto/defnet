@@ -1,6 +1,6 @@
-local codec = require './codec'
 local diff_algo = require './diff'
 local diff_codec = require './diff_codec'
+local pool = require './pool'
 
 -- defs
 export type packet = { buf: buffer, unknowns: { any }? }
@@ -8,7 +8,7 @@ export type syncer<Receiver> = {
 	send: (target: Receiver, packet) -> (),
 	targets: { [Receiver]: any },
 	snapshots: { [Receiver]: any },
-	pools: { [Receiver]: codec.pool },
+	pools: { [Receiver]: pool.pool },
 	default: any,
 }
 
@@ -16,7 +16,7 @@ export type syncer<Receiver> = {
 local function create<Receiver>(params: {
 	default: any,
 	send: (target: Receiver, packet) -> (),
-	pools: { [Receiver]: codec.pool },
+	pools: { [Receiver]: pool.pool },
 }): syncer<Receiver>
 	return {
 		default = params.default,
@@ -46,10 +46,10 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 
 	local function ensurepool(target: Receiver)
 		if pools[target] then return pools[target] end
-		local pool = codec.create_pool()
+		local new_pool = pool.create()
 
-		pools[target] = pool
-		return pool
+		pools[target] = new_pool
+		return new_pool
 	end
 
 	local function send_one(target: Receiver)
@@ -81,7 +81,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 	diff_algo.reset_cache()
 end
 
-local function apply<T>(state: T, buf: buffer, pool: codec.pool?, unknowns: { any }?)
+local function apply<T>(state: T, buf: buffer, pool: pool.pool?, unknowns: { any }?)
 	diff_algo.apply(state, diff_codec.impl.decode(buf, pool, unknowns))
 end
 
