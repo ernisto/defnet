@@ -45,7 +45,7 @@ local function not_available_unknowns(): { any }
 end
 
 local function load_workspace(input_pool: pool?, mut_unknowns: { any }?)
-	current_pool = if input_pool then input_pool else pool.create()
+	current_pool = if input_pool then pool.fork(input_pool) else pool.create()
 	unknowns = mut_unknowns or not_available_unknowns()
 	cursor = 0
 	fail = false
