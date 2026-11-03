@@ -18,7 +18,7 @@ return function(
 	if remote_index.is_unified(rbxevent) then
 		local id = args[1] :: number
 		name = remote_index.get_name(id) or `unified#{id}`
-		buf, unknowns = args[2], args[3]
+		buf, unknowns = args[3], args[4]
 	else
 		name = rbxevent:GetFullName():gsub(assert(script.Parent):GetFullName() .. '.', '')
 		buf, unknowns = args[1], args[2]

@@ -2,6 +2,7 @@ local RunService = game:GetService 'RunService'
 local is_client = RunService:IsClient()
 local is_plugin = not RunService:IsRunning()
 
+local clock = require '@self/clock'
 local codec = require '@self/utils/codec'
 local event = require '@self/event'
 local func = require '@self/func'
@@ -73,6 +74,10 @@ end
 -- module
 return table.freeze {
 	codec = codec,
+
+	ping = clock.ping,
+	clock = clock.clock,
+	server_clock = clock.server_clock,
 
 	remotes = define_remotes,
 	step_sync = state.step_sync,

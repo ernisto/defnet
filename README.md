@@ -83,6 +83,12 @@ print(net.world.client.players)
 
 Call `net.step_sync()` to flush all syncers manually; otherwise it runs on `Heartbeat`.
 
+### Clock
+
+- `defnet.clock()` — server time on client, unlike `Workspace:GetServerTimeNow()` theres no prediction of current server clock, its just last received server clock
+- `defnet.server_clock(player?)` — `clock() + ping()`, server's clock() when receive this.
+- `defnet.ping(player?)` — round-trip time (`Player:GetNetworkPing`).
+
 ## License
 
 MIT

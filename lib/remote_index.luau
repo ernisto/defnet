@@ -1,5 +1,6 @@
 local RunService = game:GetService 'RunService'
 
+local clock = require './clock'
 local codec = require './utils/codec'
 local diff_codec = require './utils/diff_codec'
 
@@ -59,9 +60,10 @@ local function ensure_unified(parent: Instance): RemoteEvent
 	unified_remote = remote
 
 	if is_client then
-		remote.OnClientEvent:Connect(function(id: number, ...)
+		remote.OnClientEvent:Connect(function(id: number, server_time: number, ...)
 			local fn = dispatchers[id] or error(`unknown remote id {id}`)
-			fn(...)
+			clock.sync(server_time)
+			fn(server_time, ...)
 		end)
 	end
 	return remote
@@ -76,7 +78,7 @@ local function fire(id: number, ...: any)
 		remote:FireServer(id, ...)
 	else
 		local target = ... :: Player
-		remote:FireClient(target, id, select(2, ...))
+		remote:FireClient(target, id, clock.clock(), select(2, ...))
 	end
 end
 
