@@ -5,6 +5,7 @@ local suites = {
 	require './pool.spec',
 	require './nan_scanner.spec',
 	require './sync.spec',
+	require './prediction.spec',
 }
 
 local function is_test(name: string, value: any): boolean

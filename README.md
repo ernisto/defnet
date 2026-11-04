@@ -89,6 +89,25 @@ Call `net.step_sync()` to flush all syncers manually; otherwise it runs on `Hear
 - `defnet.server_clock(player?)` — `clock() + ping()`, server's clock() when receive this.
 - `defnet.ping(player?)` — round-trip time (`Player:GetNetworkPing`).
 
+### Prediction (client)
+
+`state.server[localplayer]` holds the last received server data, `state.client` is `server` + pending predictions.
+
+```lua
+local op = net.world.predict(function(world)
+    table.insert(world.players, 'me')
+end)
+
+local ok = pcall(net.join.invoke_server)
+if ok then
+    net.world.settle(op.id) -- server replied: drop once a snapshot sent after now arrives
+else
+    net.world.cancel(op.id) -- drop it immediately (e.g. server refused)
+end
+```
+
+Operations stay pending until settled. `settle` stamps them with `defnet.clock()`; they're dropped once a snapshot stamped with server clock `> op.time` arrives (every unified packet carries the server clock). Until then they replay over every new server snapshot, so keep them idempotent and side-effect free. Always settle or cancel, even if the request errors, or the op lives forever.
+
 ## License
 
 MIT
