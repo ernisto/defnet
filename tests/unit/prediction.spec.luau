@@ -64,7 +64,7 @@ function test.should_cancel_by_id()
 end
 
 function test.should_keep_nested_identity_on_rebuild()
-	local p = prediction.create { shot = {}, state = {} }
+	local p = prediction.create({ shot = {}, state = {} } :: any)
 	local shot = p.client.shot
 	prediction.predict(p, {
 		time = 1,
@@ -76,7 +76,8 @@ function test.should_keep_nested_identity_on_rebuild()
 	prediction.receive(p, diff.from(p.server, { shot = { other = { kind = 'dunk' } }, state = {} }), 0)
 
 	assert(p.client.shot == shot, 'nested table identity kept')
-	assert(shot.me.kind == 'jumpshot' and shot.other.kind == 'dunk')
+	local me, other = shot.me, shot.other
+	assert(me.kind == 'jumpshot' and other.kind == 'dunk')
 	assert(p.server.shot.me == nil)
 
 	prediction.receive(p, diff.from(p.server, { shot = { other = { kind = 'dunk' } }, state = {} }), 2)
