@@ -1,10 +1,6 @@
 --!native
 
 local codec = require './codec'
-local register_push_identity = codec.register_push_identity
-local register_pop_identity = codec.register_pop_identity
-local get_identity = codec.get_identity
-local pop_identity = codec.pop_identity
 local push_value = codec.push_value
 local push_size = codec.push_varint
 local pop_value = codec.pop_value
@@ -20,9 +16,9 @@ type diff_node = {
 	removes: { any },
 }
 
--- format (uses codec's shared buffer/cursor/unknowns + identity_pool):
---   u8 tag: 0 = new (registered in identity_pool), 1 = ref
---   if ref: varint id
+-- format (uses codec's shared buffer/cursor/unknowns; nodes are per-packet, never in codec pool):
+--   u8 tag: TAG_NEW | TAG_REF
+--   if ref: varint node id (local to packet)
 --   if new:
 --     u8 mask: bit 0 = changes, bit 1 = removes, bit 2 = shift_inserts,
 --              bit 3 = shift_removes, bit 4 = children
@@ -32,7 +28,19 @@ type diff_node = {
 --     if bit 3: varint len, [ varint(index) ]
 --     if bit 4: varint len, [ push_value(key), push_diff(child) ]
 
+local TAG_NEW = 0
+local TAG_REF = 9
+
+-- workspace
+local node_to_id: { [diff_node]: number } = {}
+local id_to_node: { diff_node } = {}
+
 -- helpers
+local function reset_nodes()
+	table.clear(node_to_id)
+	table.clear(id_to_node)
+end
+
 local function count(map: { [any]: any }): number
 	local n = 0
 	for _ in map do
@@ -43,15 +51,16 @@ end
 
 -- functions
 local function push_diff(node: diff_node)
-	local id = get_identity(node)
+	local id = node_to_id[node]
 	if id then
-		push_u8(9)
+		push_u8(TAG_REF)
 		push_size(id)
 		return
 	end
 
-	push_u8(0)
-	register_push_identity(node)
+	push_u8(TAG_NEW)
+	table.insert(id_to_node, node)
+	node_to_id[node] = #id_to_node
 
 	local changes = node.changes
 	local removes = node.removes
@@ -105,11 +114,13 @@ local function push_diff(node: diff_node)
 end
 
 local function pop_diff(): diff_node
-	local tag = pop_u8()
-	if tag == 9 then return pop_identity() end
+	if pop_u8() == TAG_REF then
+		local id = pop_size()
+		return id_to_node[id] or error(`unknown diff node ref {id}`)
+	end
 
 	local node: diff_node = { children = {}, shift_inserts = {}, shift_removes = {}, changes = {}, removes = {} }
-	register_pop_identity(node)
+	table.insert(id_to_node, node)
 
 	local mask = pop_u8()
 
@@ -149,16 +160,21 @@ local function pop_diff(): diff_node
 	return node
 end
 
--- module
+-- impl
 local function encode(diff: diff_node, pool: codec.pool?): (buffer, { any }?)
 	codec.reset_workspace()
 	codec.load_pool(pool)
+	reset_nodes()
 	push_diff(diff)
+	reset_nodes()
 	return codec.save_workspace()
 end
+
 local function decode(input: buffer, pool: codec.pool?, input_unknowns: { any }?): diff_node
 	codec.load_workspace(input, input_unknowns, pool)
+	reset_nodes()
 	local diff = pop_diff()
+	reset_nodes()
 	codec.save_pool()
 	return diff
 end
