@@ -82,13 +82,13 @@ local function wrap<T...>(remote: RemoteEvent, desc: remote_desc<any>): event_ty
 		end,
 		on_client = function(handler: (T...) -> ())
 			return remote.OnClientEvent:Connect(function(...)
-				scanner.assert_valid_tuple(...)
+				scanner.assert_valid(...)
 				handler(...)
 			end :: any)
 		end,
 		on_server = function(handler: (Player, T...) -> ())
 			return remote.OnServerEvent:Connect(function(player: Player, ...)
-				scanner.assert_valid_tuple(...)
+				scanner.assert_valid(...)
 				handler(player, ...)
 			end :: any)
 		end,

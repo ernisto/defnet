@@ -30,7 +30,7 @@ local function wrap<T>(remote: RemoteFunction, desc: remote_desc<T>)
 			remote_func_debug_event:Fire(remote, ...)
 			local reply = { remote:InvokeClient(player, ...) }
 
-			scanner.assert_valid_tuple(unpack(reply))
+			scanner.assert_valid(unpack(reply))
 			remote_func_debug_event:Fire(remote, unpack(reply))
 			return unpack(reply)
 		end,
@@ -38,7 +38,7 @@ local function wrap<T>(remote: RemoteFunction, desc: remote_desc<T>)
 		__newindex = function(self, key, callback)
 			if key == 'on_server_invoke' then
 				remote.OnServerInvoke = function(player: Player, ...)
-					scanner.assert_valid_tuple(...)
+					scanner.assert_valid(...)
 					return callback(player, ...)
 				end
 			elseif key == 'on_client_invoke' then

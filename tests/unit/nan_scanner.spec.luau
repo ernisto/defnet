@@ -74,23 +74,40 @@ end
 
 -- variadic
 function test.should_pass_finite_args()
-	scan_nan.assert_valid_tuple(1, 'foo', { 2, 3 }, vector.create(1, 2, 3))
+	scan_nan.assert_valid(1, 'foo', { 2, 3 }, vector.create(1, 2, 3))
 end
 
 function test.should_error_on_nan_in_args()
-	expect_error(scan_nan.assert_valid_tuple, 1, nan, 3)
+	expect_error(scan_nan.assert_valid, 1, nan, 3)
 end
 
 function test.should_error_on_nan_in_args_table()
-	expect_error(scan_nan.assert_valid_tuple, 'ok', { bad = nan })
+	expect_error(scan_nan.assert_valid, 'ok', { bad = nan })
 end
 
 function test.should_pass_no_args()
-	scan_nan.assert_valid_tuple()
+	scan_nan.assert_valid()
 end
 
 function test.should_pass_nil_args()
-	scan_nan.assert_valid_tuple(nil, nil, nil)
+	scan_nan.assert_valid(nil, nil, nil)
+end
+
+-- false positives
+function test.should_pass_opposite_infinities()
+	scan_nan.assert_valid(math.huge, -math.huge)
+	scan_nan.assert_valid { { math.huge }, { -math.huge } }
+	scan_nan.assert_valid(vector.create(math.huge, -math.huge, 0))
+end
+
+function test.should_pass_overflowing_finite_sums()
+	scan_nan.assert_valid { { 1e308, 1e308 }, { -1e308, -1e308 } }
+end
+
+function test.should_pass_recursive_table()
+	local t = {}
+	t.self = t
+	scan_nan.assert_valid(t)
 end
 
 return test
