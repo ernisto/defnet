@@ -76,9 +76,20 @@ local function resolve_handles(unknowns: { any }?, paths: { string }?)
 
 	for index, value in unknowns do
 		if typeof(value) ~= 'InstanceHandle' then continue end
-		local instance = value:Get() or value:Wait(HANDLE_TIMEOUT)
-		if not instance then
-			local name = paths and paths[index] or `#{index}`
+		local instance = value:Get()
+		if instance then
+			unknowns[index] = instance
+			continue
+		end
+
+		local name = paths and paths[index] or `#{index}`
+		warn(`[defnet] instance handle {name} arrived before being synced, waiting`)
+
+		local waited_at = os.clock()
+		instance = value:Wait(HANDLE_TIMEOUT)
+		if instance then
+			warn(`[defnet] instance handle {name} synced after {os.clock() - waited_at}s`)
+		else
 			warn(`[defnet] instance handle {name} not synced after {HANDLE_TIMEOUT}s, decoding as nil`)
 		end
 		unknowns[index] = instance
