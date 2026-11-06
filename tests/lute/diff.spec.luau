@@ -20,6 +20,12 @@ local function roundtrip(t, prev: any, curr: any)
 	return node
 end
 
+local function cyclic(coins: number): any
+	local data = { coins = coins } :: any
+	data.self = data
+	return data
+end
+
 -- snapshot
 test.case('should_snapshot_independent', function(t)
 	local source = { coins = 10, stats = { hp = 5 }, items = { 1, 2, 3 } }
@@ -33,6 +39,14 @@ test.case('should_snapshot_independent', function(t)
 	t.eq(source.stats.hp == 5 and source.items[1] == 1, true, 'snapshot mutation leaked into source')
 end)
 
+test.case('should_snapshot_cyclic_table_keeping_cycle', function(t)
+	local data = cyclic(0)
+	local copy = diff.snapshot(data)
+
+	t.that(copy ~= data, 'snapshot must be a new table')
+	t.that(copy.self == copy, 'cycle must point to the copy')
+end)
+
 -- from: empty / equal
 test.case('should_return_nil_node_when_equal', function(t)
 	t.eq(diff.from({ a = 1, b = 2 }, { a = 1, b = 2 }), nil)
@@ -40,6 +54,10 @@ end)
 
 test.case('should_return_nil_node_for_two_empties', function(t)
 	t.eq(diff.from({}, {}), nil)
+end)
+
+test.case('should_yield_nil_diff_for_equal_cyclic_tables', function(t)
+	t.eq(diff.from(cyclic(1), cyclic(1)), nil)
 end)
 
 -- from: hash
@@ -433,4 +451,17 @@ end)
 
 test.case('should_roundtrip_nested_array_mutation', function(t)
 	roundtrip(t, { teams = { { 1, 2 }, { 3, 4 } } }, { teams = { { 1, 2 }, { 3, 4, 5 } } })
+end)
+
+test.case('should_diff_cyclic_tables_and_apply_keeping_cycle', function(t)
+	local prev = cyclic(0)
+	local curr = cyclic(5)
+
+	local node = diff.from(prev, curr)
+	assert(node)
+	t.eq(node.changes.coins, 5)
+
+	diff.apply(prev, node)
+	t.eq(prev.coins, 5)
+	t.that(prev.self == prev, 'cycle kept after apply')
 end)

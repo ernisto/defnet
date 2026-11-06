@@ -10,24 +10,29 @@ local function create<T>(client: T): predictor<T>
 end
 
 -- copies source into target reusing target's nested tables, so references held to them stay valid
-local function assign(target: any, source: any)
+-- seen maps source tables to their target, so cycles resolve to the target side
+local function assign(target: any, source: any, seen: { [any]: any })
+	seen[source] = target
 	for key in target do
 		if source[key] == nil then target[key] = nil end
 	end
 	for key, value in source do
 		local current = target[key]
-		if type(value) ~= 'table' then
+		local mapped = seen[value]
+		if mapped then
+			target[key] = mapped
+		elseif type(value) ~= 'table' then
 			target[key] = value
 		elseif type(current) == 'table' and not table.isfrozen(current) then
-			assign(current, value)
+			assign(current, value, seen)
 		else
-			target[key] = diff.snapshot(value)
+			target[key] = diff.snapshot(value, seen)
 		end
 	end
 end
 
 local function rebuild(p: predictor<any>)
-	assign(p.client, p.server)
+	assign(p.client, p.server, {})
 	for _, op in p.ops do
 		op.fn(p.client)
 	end

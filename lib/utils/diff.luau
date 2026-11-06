@@ -9,18 +9,26 @@ type diff_node = {
 }
 
 -- workspace
-local cache: { [any]: { [any]: diff_node } } = setmetatable({}, { __mode = 'k' }) :: any
+-- false marks a pair still being diffed, so cycles back into it count as equal
+local cache: { [any]: { [any]: diff_node | false } } = setmetatable({}, { __mode = 'k' }) :: any
 
 -- helpers
 local function reset_cache()
 	table.clear(cache)
 end
 
-local function deep_clone(value: any): any
+-- seen maps source tables to their clones, so shared and cyclic refs keep their shape
+local function deep_clone(value: any, seen: { [any]: any }?): any
 	if type(value) ~= 'table' then return value end
+
+	local visited = seen or {}
+	local existing = visited[value]
+	if existing then return existing end
+
 	local out = {}
+	visited[value] = out
 	for key, sub in value do
-		out[key] = deep_clone(sub)
+		out[key] = deep_clone(sub, visited)
 	end
 	return out
 end
@@ -49,7 +57,8 @@ local function from<T>(prev: any, curr: any): diff_node?
 	local by_curr = cache[prev]
 	if by_curr then
 		local hit = by_curr[curr]
-		if hit then return hit end
+		if hit == false then return nil end
+		if hit then return hit :: diff_node end
 	else
 		by_curr = {}
 		cache[prev] = by_curr
@@ -57,6 +66,7 @@ local function from<T>(prev: any, curr: any): diff_node?
 
 	local node = unused_node or empty_node()
 	unused_node = nil
+	by_curr[curr] = false
 
 	local count_prev = #prev
 	local count_curr = #curr
@@ -125,6 +135,7 @@ local function from<T>(prev: any, curr: any): diff_node?
 	end
 
 	if is_empty(node) then
+		by_curr[curr] = nil
 		unused_node = node
 		return nil
 	end

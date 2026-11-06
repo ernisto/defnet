@@ -48,7 +48,7 @@ test.case('should_not_mutate_pool_during_encode', function(t)
 	codec.impl.encode('world', seeded)
 
 	t.eq(seeded.next_id, before, 'encode works on a fork, base untouched')
-	t.eq(seeded.val_to_id.world, nil)
+	t.that(seeded.val_to_id.world == nil, 'encode must not register values in base')
 end)
 
 test.case('should_not_mutate_pool_during_decode', function(t)
@@ -82,8 +82,8 @@ test.case('should_dedup_preseeded_unknown_on_encode', function(t)
 	local inst = function() end
 	pool.add_value(seeded, inst)
 
-	local plain, unk_plain = codec.impl.encode(inst)
-	local pooled, unk_pooled = codec.impl.encode(inst, seeded)
+	local _, unk_plain = codec.impl.encode(inst)
+	local _, unk_pooled = codec.impl.encode(inst, seeded)
 
 	t.eq(unk_plain, { inst })
 	t.eq(unk_pooled, nil, 'seeded unknown encodes as pool ref, no unknown emitted')

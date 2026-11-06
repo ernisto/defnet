@@ -3,6 +3,12 @@ local test = require '@std/test'
 local diff = require '../../lib/utils/diff'
 local prediction = require '../../lib/utils/prediction'
 
+local function cyclic(coins: number): any
+	local data = { coins = coins } :: any
+	data.self = data
+	return data
+end
+
 local function add(n: number)
 	return function(data: any)
 		data.coins += n
@@ -82,4 +88,38 @@ test.case('should_keep_nested_identity_on_rebuild', function(t)
 
 	prediction.receive(p, diff.from(p.server, { shot = { other = { kind = 'dunk' } }, state = {} }), 2)
 	assert(shot.me == nil and shot.other.kind == 'dunk')
+end)
+
+test.case('should_create_predictor_from_cyclic_client', function(t)
+	local client = cyclic(0)
+	local p = prediction.create(client)
+
+	t.that(p.server ~= client, 'server must not share tables with client')
+	t.that(p.server.self == p.server, 'server cycle points to server')
+	t.that(client.self == client, 'client cycle untouched')
+end)
+
+test.case('should_replay_ops_over_cyclic_server_diff', function(t)
+	local client = cyclic(0)
+	local p = prediction.create(client)
+
+	prediction.predict(p, { time = 10, id = 1, fn = add(1) })
+	t.eq(client.coins, 1)
+
+	prediction.receive(p, diff.from(p.server, cyclic(100)), 5)
+	t.eq(p.server.coins, 100)
+	t.eq(client.coins, 101)
+	t.that(p.client == client and client.self == client, 'client identity and cycle kept on rebuild')
+	t.that(p.server.self == p.server, 'server cycle kept')
+end)
+
+test.case('should_apply_cyclic_server_diff_without_ops', function(t)
+	local client = cyclic(0)
+	local p = prediction.create(client)
+
+	prediction.receive(p, diff.from(p.server, cyclic(7)), 0)
+	t.eq(p.server.coins, 7)
+	t.eq(client.coins, 7)
+	t.that(client.self == client, 'client cycle kept')
+	t.that(p.server.self ~= client, 'server must not point into client')
 end)
