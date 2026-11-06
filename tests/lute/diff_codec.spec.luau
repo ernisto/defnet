@@ -246,7 +246,7 @@ end)
 test.case('should_skip_missing_unknowns_and_keep_pool_aligned', function(t)
 	local shared = { hp = 1 }
 	local node = empty_node()
-	node.changes.data = { print, shared, shared }
+	node.changes.data = { print, shared, shared } :: { any }
 	node.changes[print] = true
 	node.children[print] = empty_node()
 
