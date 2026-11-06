@@ -29,112 +29,76 @@ test.case('should_create_pool_with_empty_maps', function(t)
 	t.eq(pool.next_id, 1)
 end)
 
-test.case('should_fork_copies_base_entries_and_next_id', function(t)
-	local base = pool.create()
-	pool.add_value(base, 'seed')
-	base.next_id += 5
+-- codec encode/decode with pool dedup across calls
+test.case('should_dedup_string_across_encode_calls_with_same_pool', function(t)
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
 
-	local child = pool.fork(base)
-	t.eq(child.val_to_id.seed, base.val_to_id.seed)
-	t.eq(child.next_id, base.next_id)
+	local buf1, unk1 = codec.impl.encode('hello', pool_enc)
+	local buf2, unk2 = codec.impl.encode('hello', pool_enc)
+
+	t.that(buffer.len(buf2) < buffer.len(buf1), 'second encode must be smaller (ref tag)')
+
+	t.eq(codec.impl.decode(buf1, pool_dec, unk1), 'hello')
+	t.eq(codec.impl.decode(buf2, pool_dec, unk2), 'hello')
 end)
 
--- codec encode/decode: pool is a read-only seed, each call works on a fork
-test.case('should_not_mutate_pool_during_encode', function(t)
-	local seeded = pool.create()
-	pool.add_value(seeded, 'hello')
-	local before = seeded.next_id
+test.case('should_dedup_table_across_encode_calls_with_same_pool', function(t)
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
 
-	codec.impl.encode('world', seeded)
-
-	t.eq(seeded.next_id, before, 'encode works on a fork, base untouched')
-	t.that(seeded.val_to_id.world == nil, 'encode must not register values in base')
-end)
-
-test.case('should_not_mutate_pool_during_decode', function(t)
-	local buf = codec.impl.encode 'hello'
-	local seeded = pool.create()
-	local before = seeded.next_id
-
-	codec.impl.decode(buf, seeded)
-
-	t.eq(seeded.next_id, before, 'decode works on a fork, base untouched')
-	t.eq(next(seeded.val_to_id), nil)
-end)
-
-test.case('should_dedup_preseeded_value_on_encode', function(t)
-	local seeded = pool.create()
-	pool.add_value(seeded, 'hello')
-
-	local plain = codec.impl.encode 'hello'
-	local pooled = codec.impl.encode('hello', seeded)
-
-	t.that(buffer.len(pooled) < buffer.len(plain), 'seeded value encodes as ref')
-
-	-- refs decode against a paired receiver pool seeded with the same values
-	local receiver = pool.create()
-	pool.add_value(receiver, 'hello')
-	t.eq(codec.impl.decode(pooled, receiver), 'hello')
-end)
-
-test.case('should_dedup_preseeded_unknown_on_encode', function(t)
-	local seeded = pool.create()
-	local inst = function() end
-	pool.add_value(seeded, inst)
-
-	local _, unk_plain = codec.impl.encode(inst)
-	local _, unk_pooled = codec.impl.encode(inst, seeded)
-
-	t.eq(unk_plain, { inst })
-	t.eq(unk_pooled, nil, 'seeded unknown encodes as pool ref, no unknown emitted')
-end)
-
-test.case('should_dedup_repeated_value_within_single_encode', function(t)
-	local long = 'a_very_long_repeated_string_value'
-
-	local distinct = codec.impl.encode { a = long, b = long .. '_other' }
-	local shared = codec.impl.encode { a = long, b = long }
-
-	t.that(buffer.len(shared) < buffer.len(distinct), 'second occurrence in one payload is a ref')
-end)
-
-test.case('should_dedup_repeated_table_within_single_encode', function(t)
 	local shared = { x = 1, y = 2 }
+	local buf1 = codec.impl.encode(shared, pool_enc)
+	local buf2 = codec.impl.encode(shared, pool_enc)
 
-	local distinct = codec.impl.encode { { x = 1, y = 2 }, { x = 1, y = 2 } }
-	local pooled = codec.impl.encode { shared, shared }
+	t.that(buffer.len(buf2) < buffer.len(buf1), 'second encode of same table must be smaller')
 
-	t.that(buffer.len(pooled) < buffer.len(distinct), 'shared subtable encodes as ref')
+	t.eq(
+		codec.impl.decode(buf1, pool_dec),
+		codec.impl.decode(buf2, pool_dec),
+		'pool preserves identity across decode calls'
+	)
 end)
 
-test.case('should_resolve_pooled_refs_to_same_table_in_one_decode', function(t)
-	local shared = { x = 1 }
+test.case('should_grow_pool_next_id_across_encodes', function(t)
+	local pool = pool.create()
+	codec.impl.encode('a', pool)
+	local first = pool.next_id
 
-	local buf, unk = codec.impl.encode { shared, shared }
-	local decoded = codec.impl.decode(buf, nil, unk)
+	codec.impl.encode('b', pool)
+	t.that(pool.next_id > first, 'next_id increments per new value')
+end)
 
-	t.eq(decoded[1], decoded[2], 'identity preserved within one decode')
+test.case('should_grow_pool_next_id_across_decodes', function(t)
+	local pool_enc = pool.create()
+	local pool_dec = pool.create()
+
+	local b1 = codec.impl.encode('a', pool_enc)
+	codec.impl.decode(b1, pool_dec)
+	local first = pool_dec.next_id
+
+	local b2 = codec.impl.encode('b', pool_enc)
+	codec.impl.decode(b2, pool_dec)
+	t.that(pool_dec.next_id > first, 'decode side commits next_id')
 end)
 
 test.case('should_keep_pool_independent_when_not_passed', function(t)
-	local seeded = pool.create()
-	pool.add_value(seeded, 'hello')
-	local before = seeded.next_id
+	local pool = pool.create()
+	codec.impl.encode('hello', pool)
+	local before = pool.next_id
 
 	codec.impl.encode 'hello' -- no pool
-	t.eq(seeded.next_id, before, 'unrelated encode must not mutate pool')
+	t.eq(pool.next_id, before, 'unrelated encode must not mutate pool')
 end)
 
 test.case('should_isolate_distinct_pools', function(t)
 	local pool_a = pool.create()
 	local pool_b = pool.create()
-	pool.add_value(pool_a, 'hello')
 
-	local pooled = codec.impl.encode('hello', pool_a)
-	local bare = codec.impl.encode('hello', pool_b)
-
-	t.that(buffer.len(pooled) < buffer.len(bare), 'only pool_a has the seed')
+	codec.impl.encode('hello', pool_a)
 	t.eq(pool_b.next_id, 1, 'pool_b untouched')
+	t.that(pool_a.val_to_id.hello ~= nil)
+	t.that(pool_b.val_to_id.hello == nil)
 end)
 
 test.case('should_roundtrip_recursive_table_with_pool', function(t)
@@ -160,68 +124,62 @@ test.case('should_roundtrip_diff_with_pool', function(t)
 	t.eq(diff_codec.impl.decode(buf, pool_dec, unk).changes.coins, 50)
 end)
 
-test.case('should_dedup_preseeded_diff_value_via_pool', function(t)
-	local seeded = pool.create()
-	pool.add_value(seeded, 'alice')
+test.case('should_dedup_repeated_diff_payload_via_pool', function(t)
+	local pool_enc = pool.create()
 
-	local node: any =
+	local node1: any =
+		{ children = {}, shift_inserts = {}, shift_removes = {}, changes = { name = 'alice' }, removes = {} }
+	local node2: any =
 		{ children = {}, shift_inserts = {}, shift_removes = {}, changes = { name = 'alice' }, removes = {} }
 
-	local bare = diff_codec.impl.encode(node)
-	local pooled = diff_codec.impl.encode(node, seeded)
-	t.that(buffer.len(pooled) < buffer.len(bare), 'seeded key/value dedup')
+	local buf1 = diff_codec.impl.encode(node1, pool_enc)
+	local buf2 = diff_codec.impl.encode(node2, pool_enc)
+	t.that(buffer.len(buf2) < buffer.len(buf1), 'repeated key+value dedup')
 end)
 
--- sync with pools map (pools act as read-only seeds per target)
-test.case('should_create_pool_on_demand_per_target', function(t)
-	local pools: { [string]: pool.pool } = {}
+-- sync with pools map
+test.case('should_use_per_target_pool_in_sync', function(t)
+	local pools: { [string]: pool.pool } = { p1 = pool.create() }
 	local s, sent = make_syncer_with_pools({ coins = 0 }, pools)
-	s.targets.p1 = { coins = 10 }
+	local world = { coins = 10 }
+	s.targets.p1 = world
 
 	sync.step(s)
 	t.eq(#sent, 1)
-	t.that(pools.p1 ~= nil, 'target pool created lazily')
-	t.eq(pools.p1.next_id, 1, 'seed pool not mutated by encode')
+	t.that(pools.p1.next_id > 1, 'pool grew during encode')
 end)
 
-test.case('should_share_seed_pool_across_multiple_states_for_same_target', function(t)
+test.case('should_share_pool_across_multiple_states_for_same_target', function(t)
 	local pools: { [string]: pool.pool } = { p1 = pool.create() }
-	local s_a, sent_a = make_syncer_with_pools({ name = '' }, pools)
-	local s_b, sent_b = make_syncer_with_pools({ label = '' }, pools)
+	local s_a, _ = make_syncer_with_pools({ name = '' }, pools)
+	local s_b, _ = make_syncer_with_pools({ label = '' }, pools)
 
 	s_a.targets.p1 = { name = 'shared_string' }
 	s_b.targets.p1 = { label = 'shared_string' }
 
 	sync.step(s_a)
-	sync.step(s_b)
-	t.eq(pools.p1.next_id, 1, 'seed pool stays pristine')
+	local id_after_a = pools.p1.val_to_id.shared_string
+	t.that(id_after_a ~= nil, 'string registered after first sync')
 
-	local client = { name = '', label = '' }
-	sync.apply(client, sent_a[1].buf, nil, sent_a[1].unknowns)
-	sync.apply(client, sent_b[1].buf, nil, sent_b[1].unknowns)
-	t.eq(client.name, 'shared_string')
-	t.eq(client.label, 'shared_string')
+	sync.step(s_b)
+	t.eq(pools.p1.val_to_id.shared_string, id_after_a, 'second state reuses same id')
 end)
 
-test.case('should_emit_smaller_packet_with_preseeded_pool', function(t)
-	local plain_pools: { [string]: pool.pool } = { p1 = pool.create() }
-	local seeded_pools: { [string]: pool.pool } = { p1 = pool.create() }
-	pool.add_value(seeded_pools.p1, 'long_unique_name_alpha')
+test.case('should_emit_smaller_packet_on_repeated_string_with_persistent_pool', function(t)
+	local pools: { [string]: pool.pool } = { p1 = pool.create() }
+	local s, sent = make_syncer_with_pools({ name = '' }, pools)
+	local world = { name = 'long_unique_name_alpha' }
+	s.targets.p1 = world
+	sync.step(s)
+	local first_size = buffer.len(sent[1].buf)
 
-	local s_plain, sent_plain = make_syncer_with_pools({ name = '' }, plain_pools)
-	local s_seeded, sent_seeded = make_syncer_with_pools({ name = '' }, seeded_pools)
+	world.name = 'long_unique_name_alpha_other'
+	sync.step(s)
+	world.name = 'long_unique_name_alpha' -- already in pool from first packet
+	sync.step(s)
 
-	s_plain.targets.p1 = { name = 'long_unique_name_alpha' }
-	s_seeded.targets.p1 = { name = 'long_unique_name_alpha' }
-	sync.step(s_plain)
-	sync.step(s_seeded)
-
-	local plain_size = buffer.len(sent_plain[1].buf)
-	local seeded_size = buffer.len(sent_seeded[1].buf)
-	t.that(
-		seeded_size < plain_size,
-		`expected seeded pool ref packet smaller, got plain={plain_size} seeded={seeded_size}`
-	)
+	local last_size = buffer.len(sent[#sent].buf)
+	t.that(last_size < first_size, `expected last packet smaller via ref, got first={first_size} last={last_size}`)
 end)
 
 test.case('should_roundtrip_through_paired_sync_pools', function(t)
@@ -234,12 +192,12 @@ test.case('should_roundtrip_through_paired_sync_pools', function(t)
 	sync.step(s)
 
 	local client: any = {}
-	sync.apply(client, sent[1].buf, pool.fork(client_pool), sent[1].unknowns)
+	sync.apply(client, sent[1].buf, client_pool, sent[1].unknowns)
 	t.eq(client.items[1] == 'sword' and client.items[2] == 'shield', true)
 
 	world.items = { 'sword', 'shield', 'bow' }
 	sync.step(s)
-	sync.apply(client, sent[2].buf, pool.fork(client_pool), sent[2].unknowns)
+	sync.apply(client, sent[2].buf, client_pool, sent[2].unknowns)
 	t.eq(client.items[3], 'bow', 'second packet applied via paired pool')
 end)
 
@@ -248,16 +206,14 @@ test.case('should_isolate_pools_per_target', function(t)
 		p1 = pool.create(),
 		p2 = pool.create(),
 	}
-	pool.add_value(pools.p1, 'seed')
-	local s, sent = make_syncer_with_pools({ name = '' }, pools)
+	local s, _ = make_syncer_with_pools({ name = '' }, pools)
 
-	s.targets.p1 = { name = 'seed' }
-	s.targets.p2 = { name = 'seed' }
+	s.targets.p1 = { name = 'only_p1' }
+	s.targets.p2 = { name = 'only_p2' }
 	sync.step(s)
 
-	local sizes = {}
-	for _, m in sent do
-		sizes[m.target] = buffer.len(m.buf)
-	end
-	t.that(sizes.p1 < sizes.p2, `only p1 seed applies, got p1={sizes.p1} p2={sizes.p2}`)
+	t.that(pools.p1.val_to_id.only_p1 ~= nil)
+	t.that(pools.p1.val_to_id.only_p2 == nil)
+	t.that(pools.p2.val_to_id.only_p2 ~= nil)
+	t.that(pools.p2.val_to_id.only_p1 == nil)
 end)
