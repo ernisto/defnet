@@ -241,3 +241,21 @@ test.case('should_roundtrip_only_children', function(t)
 	t.eq(count(decoded.changes), 0)
 	t.eq(#decoded.removes, 0)
 end)
+
+-- unknowns missing on receiver (e.g. instance not replicated)
+test.case('should_skip_missing_unknowns_and_keep_pool_aligned', function(t)
+	local shared = { hp = 1 }
+	local node = empty_node()
+	node.changes.data = { print, shared, shared }
+	node.changes[print] = true
+	node.children[print] = empty_node()
+
+	local buf = diff_codec.impl.encode(node)
+	local decoded = diff_codec.impl.decode(buf, nil, {})
+
+	t.eq(decoded.changes.data[1], nil)
+	t.eq(decoded.changes.data[2].hp, 1)
+	t.eq(decoded.changes.data[3], decoded.changes.data[2])
+	t.eq(count(decoded.changes), 1)
+	t.eq(count(decoded.children), 0)
+end)

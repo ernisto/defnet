@@ -129,7 +129,8 @@ local function pop_diff(): diff_node
 		local len = pop_size()
 		for _ = 1, len do
 			local key = pop_value()
-			node.changes[key] = pop_value()
+			local value = pop_value()
+			if key ~= nil then node.changes[key] = value end
 		end
 	end
 	if (mask // 2) % 2 >= 1 then
@@ -154,7 +155,8 @@ local function pop_diff(): diff_node
 		local len = pop_size()
 		for _ = 1, len do
 			local key = pop_value()
-			node.children[key] = pop_diff()
+			local child = pop_diff()
+			if key ~= nil then node.children[key] = child end
 		end
 	end
 

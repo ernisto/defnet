@@ -189,6 +189,11 @@ end
 local function pop_unknown(): any
 	local value = unknowns[pop_size()]
 
+	-- HACK: instances not replicated to this client arrive as nil; still burn the id so later pooled refs stay aligned with the server
+	if value == nil then
+		current_pool.next_id += 1
+		return nil
+	end
 	pool.add_value(current_pool, value)
 	return value
 end
