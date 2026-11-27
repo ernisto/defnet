@@ -1,4 +1,5 @@
 local scanner = require './utils/nan_scanner'
+local state = require './state'
 
 local remote_func_debug_event = script:FindFirstChild 'RemoteFunctionEvent.profiler' :: BindableEvent
 	or Instance.new('BindableEvent', script)
@@ -17,6 +18,12 @@ export type func_type<T..., R...> = {
 }
 
 -- functions
+-- flushes the caller's state before replying, so the reply arrives after the diffs it caused and predictions can settle on it
+local function reply(player: Player, ...)
+	state.step_sync(player)
+	return ...
+end
+
 local function wrap<T>(remote: RemoteFunction, desc: remote_desc<T>)
 	return setmetatable({
 		invoke_server = function(...)
@@ -39,7 +46,7 @@ local function wrap<T>(remote: RemoteFunction, desc: remote_desc<T>)
 			if key == 'on_server_invoke' then
 				remote.OnServerInvoke = function(player: Player, ...)
 					scanner.assert_valid(...)
-					return callback(player, ...)
+					return reply(player, callback(player, ...))
 				end
 			elseif key == 'on_client_invoke' then
 				remote.OnClientInvoke = function(...)

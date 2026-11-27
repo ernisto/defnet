@@ -1,7 +1,6 @@
 local Players = game:GetService 'Players'
 local RunService = game:GetService 'RunService'
 
-local clock = require './clock'
 local codec = require './utils/codec'
 local diff = require './utils/diff'
 local diff_codec = require './utils/diff_codec'
@@ -12,7 +11,7 @@ local sync = require './utils/sync'
 
 -- defs
 export type remote_desc<T> = { rbxclass: 'RemoteEvent', default: T?, id: number, unified: true }
-export type op = { time: number, id: number }
+export type op = { id: number }
 export type state_type<T> = {
 	changed: (() -> ()) -> (),
 	codec: codec.codec_impl<T>?,
@@ -36,34 +35,32 @@ local function wrap_client<T>(event: BindableEvent, desc: remote_desc<T>): state
 
 	local function predict(fn: (any) -> ()): op
 		next_op_id += 1
-		local op = { time = math.huge, id = next_op_id, fn = fn }
+		local op = { id = next_op_id, fn = fn }
 
 		prediction.predict(p, op)
 		event:Fire()
 		return op
 	end
 
-	local function settle(id: number)
-		prediction.settle(p, id, clock.clock())
-	end
-	local function cancel(id: number)
-		if prediction.cancel(p, id) then event:Fire() end
+	-- a func reply arrives after the diffs the server flushed for it, so the server state already holds a settled op
+	local function drop(id: number)
+		if prediction.drop(p, id) then event:Fire() end
 	end
 	local function changed(callback)
 		return event.Event:Connect(callback)
 	end
 
-	remote_index.on(desc.id, function(server_time: number, buf: buffer, unknowns: { any })
+	remote_index.on(desc.id, function(_server_time: number, buf: buffer, unknowns: { any })
 		local node = diff_codec.impl.decode(buf, remote_index.client_pool, unknowns)
-		prediction.receive(p, node, server_time)
+		prediction.receive(p, node)
 		event:Fire()
 	end)
 
 	return table.freeze {
 		changed = changed,
 		predict = predict,
-		settle = settle,
-		cancel = cancel,
+		settle = drop,
+		cancel = drop,
 		server = { [Players.LocalPlayer] = p.server },
 		client = p.client,
 	} :: any

@@ -1,7 +1,7 @@
 local diff = require './diff'
 
 -- defs
-export type op<T> = { time: number, id: number, fn: (T) -> () }
+export type op<T> = { id: number, fn: (T) -> () }
 export type predictor<T> = { server: T, client: T, ops: { op<T> } }
 
 -- functions
@@ -38,20 +38,13 @@ local function rebuild(p: predictor<any>)
 	end
 end
 
--- applies a server diff stamped at server_time, dropping the ops it settles
-local function receive(p: predictor<any>, node: any, server_time: number)
+local function receive(p: predictor<any>, node: any)
 	diff.apply(p.server, node)
 
 	if #p.ops == 0 then
 		diff.apply(p.client, diff.snapshot(node))
 		return
 	end
-
-	local ops = p.ops
-	for index = #ops, 1, -1 do
-		if server_time > ops[index].time then table.remove(ops, index) end
-	end
-
 	rebuild(p)
 end
 
@@ -60,20 +53,14 @@ local function predict<T>(p: predictor<T>, op: op<T>)
 	op.fn(p.client)
 end
 
-local function cancel(p: predictor<any>, id: number): boolean
+-- drops the op and replays the rest over the server state
+-- settling and cancelling only differ in whether the server state already holds the op's effect
+local function drop(p: predictor<any>, id: number): boolean
 	for index, op in p.ops do
 		if op.id ~= id then continue end
 		table.remove(p.ops, index)
 
 		rebuild(p)
-		return true
-	end
-	return false
-end
-local function settle(p: predictor<any>, id: number, time: number): boolean
-	for _, op in p.ops do
-		if op.id ~= id then continue end
-		op.time = time
 		return true
 	end
 	return false
@@ -84,6 +71,5 @@ return table.freeze {
 	create = create,
 	receive = receive,
 	predict = predict,
-	cancel = cancel,
-	settle = settle,
+	drop = drop,
 }

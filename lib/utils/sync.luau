@@ -66,7 +66,7 @@ local function step<Receiver>(syncer: syncer<Receiver>, target: Receiver?)
 	end
 
 	if target then
-		send_one(target)
+		if syncer.targets[target] ~= nil then send_one(target) end
 	else
 		for receiver in syncer.targets do
 			send_one(receiver)
